@@ -9,6 +9,7 @@ import { HighScoresModal } from './components/HighScoresModal';
 import { HowToPlayModal } from './components/HowToPlayModal';
 import { LevelEditor } from './components/LevelEditor';
 import { endlessGenerator } from './game/endless';
+import { storage } from './utils/storage';
 
 const DEFAULT_SETTINGS: GameSettings = {
   soundEnabled: true,
@@ -27,23 +28,23 @@ export function App() {
   
   // Persistent State
   const [coins, setCoins] = useState<number>(() => {
-    const saved = localStorage.getItem('ce_coins');
-    return saved ? parseInt(saved, 10) : 250; // default start with 250 stars for rewards!
+    const saved = storage.getItem('ce_coins');
+    const n = saved ? parseInt(saved, 10) : NaN;
+    return Number.isFinite(n) ? n : 250; // default start with 250 stars for rewards!
   });
 
-  const [settings, setSettings] = useState<GameSettings>(() => {
-    const saved = localStorage.getItem('ce_settings');
-    return saved ? JSON.parse(saved) : DEFAULT_SETTINGS;
-  });
+  const [settings, setSettings] = useState<GameSettings>(() =>
+    // Merge with defaults so a partial/old saved payload can't break the game.
+    ({ ...DEFAULT_SETTINGS, ...storage.getJSON<Partial<GameSettings>>('ce_settings', {}) })
+  );
 
-  const [progress, setProgress] = useState<LevelProgress[]>(() => {
-    const saved = localStorage.getItem('ce_progress');
-    return saved ? JSON.parse(saved) : [{ levelId: 1, completed: false, stars: 0 }];
-  });
+  const [progress, setProgress] = useState<LevelProgress[]>(() =>
+    storage.getJSON<LevelProgress[]>('ce_progress', [{ levelId: 1, completed: false, stars: 0 }])
+  );
 
   const [highScores, setHighScores] = useState<HighScoreEntry[]>(() => {
-    const saved = localStorage.getItem('ce_highscores');
-    if (saved) return JSON.parse(saved);
+    const saved = storage.getJSON<HighScoreEntry[] | null>('ce_highscores', null);
+    if (saved) return saved;
     return [
       { id: 'hs_1', name: 'CyberSpider', score: 450, height: 45, date: '10/05/2026', mode: 'endless' },
       { id: 'hs_2', name: 'NeonSwinger', score: 320, height: 32, date: '11/05/2026', mode: 'endless' },
@@ -51,39 +52,37 @@ export function App() {
     ];
   });
 
-  const [unlockedSkins, setUnlockedSkins] = useState<string[]>(() => {
-    const saved = localStorage.getItem('ce_unlocked_skins');
-    return saved ? JSON.parse(saved) : ['plasma'];
-  });
+  const [unlockedSkins, setUnlockedSkins] = useState<string[]>(() =>
+    storage.getJSON<string[]>('ce_unlocked_skins', ['plasma'])
+  );
 
-  const [communityLevels, setCommunityLevels] = useState<LevelData[]>(() => {
-    const saved = localStorage.getItem('ce_community_levels');
-    return saved ? JSON.parse(saved) : COMMUNITY_LEVELS;
-  });
+  const [communityLevels, setCommunityLevels] = useState<LevelData[]>(() =>
+    storage.getJSON<LevelData[]>('ce_community_levels', COMMUNITY_LEVELS)
+  );
 
-  // Save changes to localStorage
+  // Persist changes (no-ops safely when storage is unavailable)
   useEffect(() => {
-    localStorage.setItem('ce_coins', coins.toString());
+    storage.setItem('ce_coins', coins.toString());
   }, [coins]);
 
   useEffect(() => {
-    localStorage.setItem('ce_settings', JSON.stringify(settings));
+    storage.setJSON('ce_settings', settings);
   }, [settings]);
 
   useEffect(() => {
-    localStorage.setItem('ce_progress', JSON.stringify(progress));
+    storage.setJSON('ce_progress', progress);
   }, [progress]);
 
   useEffect(() => {
-    localStorage.setItem('ce_highscores', JSON.stringify(highScores));
+    storage.setJSON('ce_highscores', highScores);
   }, [highScores]);
 
   useEffect(() => {
-    localStorage.setItem('ce_unlocked_skins', JSON.stringify(unlockedSkins));
+    storage.setJSON('ce_unlocked_skins', unlockedSkins);
   }, [unlockedSkins]);
 
   useEffect(() => {
-    localStorage.setItem('ce_community_levels', JSON.stringify(communityLevels));
+    storage.setJSON('ce_community_levels', communityLevels);
   }, [communityLevels]);
 
   // Handlers

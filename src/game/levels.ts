@@ -40,7 +40,9 @@ export const CAMPAIGN_LEVELS: LevelData[] = [
     goalY: 400,
     goalRadius: 40,
     bounds: { width: 1200, height: 700 },
-    targetTime: 5,
+    targetTime: 9,
+    starsRequired: 0,
+    rules: { maxHooks: 6, maxLaunches: 5, hookRange: 340 },
     nodes: [
       { id: 'n1', x: 200, y: 400, radius: 16, type: 'normal' },
       { id: 'n2', x: 550, y: 250, radius: 16, type: 'normal' }
@@ -69,7 +71,9 @@ export const CAMPAIGN_LEVELS: LevelData[] = [
     goalY: 300,
     goalRadius: 40,
     bounds: { width: 1300, height: 700 },
-    targetTime: 6,
+    targetTime: 11,
+    starsRequired: 0,
+    rules: { maxHooks: 6, maxLaunches: 4, hookRange: 340 },
     nodes: [
       { id: 'n1', x: 150, y: 300, radius: 16, type: 'normal' },
       { id: 'n2', x: 450, y: 180, radius: 16, type: 'normal' },
@@ -96,7 +100,9 @@ export const CAMPAIGN_LEVELS: LevelData[] = [
     goalY: 200,
     goalRadius: 40,
     bounds: { width: 1400, height: 800 },
-    targetTime: 8,
+    targetTime: 13,
+    starsRequired: 1,
+    rules: { maxHooks: 5, maxLaunches: 4, maxWallHits: 6, hookRange: 330 },
     nodes: [
       { id: 'n1', x: 150, y: 500, radius: 16, type: 'normal' },
       { id: 'n2', x: 400, y: 300, radius: 16, type: 'normal' },
@@ -125,7 +131,9 @@ export const CAMPAIGN_LEVELS: LevelData[] = [
     goalY: 600,
     goalRadius: 40,
     bounds: { width: 1100, height: 800 },
-    targetTime: 7,
+    targetTime: 13,
+    starsRequired: 3,
+    rules: { maxHooks: 5, maxLaunches: 4, maxWallHits: 6, hookRange: 330 },
     nodes: [
       { id: 'n1', x: 150, y: 200, radius: 16, type: 'normal' },
       { id: 'n2', x: 550, y: 200, radius: 16, type: 'normal' },
@@ -153,7 +161,9 @@ export const CAMPAIGN_LEVELS: LevelData[] = [
     goalY: 200,
     goalRadius: 45,
     bounds: { width: 1500, height: 800 },
-    targetTime: 10,
+    targetTime: 16,
+    starsRequired: 5,
+    rules: { maxHooks: 5, maxLaunches: 3, maxWallHits: 5, timeLimit: 45, hookRange: 320 },
     nodes: [
       { id: 'n1', x: 150, y: 600, radius: 16, type: 'normal' },
       { id: 'n2', x: 450, y: 400, radius: 16, type: 'normal' },
@@ -185,14 +195,16 @@ export const CAMPAIGN_LEVELS: LevelData[] = [
     goalY: 350,
     goalRadius: 40,
     bounds: { width: 1300, height: 700 },
-    targetTime: 7,
+    targetTime: 14,
+    starsRequired: 8,
+    rules: { maxHooks: 5, maxLaunches: 3, maxWallHits: 4, timeLimit: 45, hookRange: 320, floorIsLethal: true },
     nodes: [
       { id: 'n1', x: 150, y: 350, radius: 16, type: 'normal' },
       { id: 'n2', x: 450, y: 200, radius: 16, type: 'normal' },
       { id: 'n3', x: 850, y: 200, radius: 16, type: 'normal' }
     ],
     obstacles: [
-      { id: 'w1', type: 'wall', x: 0, y: 650, width: 1300, height: 50 },
+      { id: 'w1', type: 'wall', x: 0, y: 650, width: 1300, height: 50, lethal: true },
       { id: 'w2', type: 'wall', x: 0, y: 0, width: 1300, height: 50 },
       { id: 's1', type: 'sawblade', x: 450, y: 480, radius: 55 },
       { id: 's2', type: 'sawblade', x: 650, y: 250, radius: 45 },
@@ -215,7 +227,9 @@ export const CAMPAIGN_LEVELS: LevelData[] = [
     goalY: 300,
     goalRadius: 45,
     bounds: { width: 1400, height: 800 },
-    targetTime: 8,
+    targetTime: 15,
+    starsRequired: 11,
+    rules: { maxHooks: 4, maxLaunches: 3, maxWallHits: 4, timeLimit: 45, hookRange: 310, floorIsLethal: true },
     nodes: [
       { id: 'n1', x: 150, y: 500, radius: 16, type: 'normal' },
       { id: 'n2', x: 450, y: 250, radius: 16, type: 'fragile', maxTimer: 1.5 },
@@ -223,7 +237,7 @@ export const CAMPAIGN_LEVELS: LevelData[] = [
       { id: 'n4', x: 1050, y: 250, radius: 16, type: 'normal' }
     ],
     obstacles: [
-      { id: 'w1', type: 'wall', x: 0, y: 750, width: 1400, height: 50 },
+      { id: 'w1', type: 'wall', x: 0, y: 750, width: 1400, height: 50, lethal: true },
       { id: 'l1', type: 'laser', x: 300, y: 740, endX: 1200, endY: 740 },
       { id: 's1', type: 'sawblade', x: 600, y: 500, radius: 60 },
       { id: 's2', type: 'sawblade', x: 900, y: 500, radius: 60 }
@@ -245,7 +259,9 @@ export const CAMPAIGN_LEVELS: LevelData[] = [
     goalY: 400,
     goalRadius: 40,
     bounds: { width: 1500, height: 800 },
-    targetTime: 9,
+    targetTime: 16,
+    starsRequired: 14,
+    rules: { maxHooks: 4, maxLaunches: 3, maxWallHits: 3, timeLimit: 50, hookRange: 310, floorIsLethal: true },
     nodes: [
       { id: 'n1', x: 150, y: 400, radius: 16, type: 'normal' },
       { id: 'n2', x: 450, y: 200, radius: 16, type: 'normal' },
@@ -253,7 +269,7 @@ export const CAMPAIGN_LEVELS: LevelData[] = [
       { id: 'n4', x: 1050, y: 200, radius: 16, type: 'normal' }
     ],
     obstacles: [
-      { id: 'w1', type: 'wall', x: 0, y: 750, width: 1500, height: 50 },
+      { id: 'w1', type: 'wall', x: 0, y: 750, width: 1500, height: 50, lethal: true },
       { id: 'w2', type: 'wall', x: 0, y: 0, width: 1500, height: 50 },
       { id: 'l1', type: 'laser', x: 600, y: 0, endX: 600, endY: 350 },
       { id: 'l2', type: 'laser', x: 600, y: 500, endX: 600, endY: 750 },
@@ -277,14 +293,16 @@ export const CAMPAIGN_LEVELS: LevelData[] = [
     goalY: 150,
     goalRadius: 40,
     bounds: { width: 1400, height: 800 },
-    targetTime: 8,
+    targetTime: 15,
+    starsRequired: 17,
+    rules: { maxHooks: 4, maxLaunches: 3, maxWallHits: 3, timeLimit: 45, hookRange: 300, floorIsLethal: true },
     nodes: [
       { id: 'n1', x: 150, y: 600, radius: 16, type: 'normal' },
       { id: 'n2', x: 600, y: 350, radius: 16, type: 'normal' },
       { id: 'n3', x: 1000, y: 250, radius: 16, type: 'normal' }
     ],
     obstacles: [
-      { id: 'w1', type: 'wall', x: 0, y: 750, width: 1400, height: 50 },
+      { id: 'w1', type: 'wall', x: 0, y: 750, width: 1400, height: 50, lethal: true },
       { id: 'n_b1', type: 'sawblade', x: 350, y: 680, radius: 40 },
       // Bumpers represented as bouncing obstacles or special nodes
       { id: 'b1', type: 'wall', x: 400, y: 600, width: 160, height: 30 }, // Will act as bumper
@@ -307,7 +325,9 @@ export const CAMPAIGN_LEVELS: LevelData[] = [
     goalY: 300,
     goalRadius: 45,
     bounds: { width: 1600, height: 800 },
-    targetTime: 12,
+    targetTime: 20,
+    starsRequired: 20,
+    rules: { maxHooks: 4, maxLaunches: 2, maxWallHits: 3, timeLimit: 55, hookRange: 300, floorIsLethal: true },
     nodes: [
       { id: 'n1', x: 150, y: 600, radius: 16, type: 'normal' },
       { id: 'n2', x: 450, y: 300, radius: 16, type: 'fragile', maxTimer: 1.4 },
@@ -315,7 +335,7 @@ export const CAMPAIGN_LEVELS: LevelData[] = [
       { id: 'n4', x: 1150, y: 300, radius: 16, type: 'fragile', maxTimer: 1.4 }
     ],
     obstacles: [
-      { id: 'w1', type: 'wall', x: 0, y: 750, width: 1600, height: 50 },
+      { id: 'w1', type: 'wall', x: 0, y: 750, width: 1600, height: 50, lethal: true },
       { id: 'l1', type: 'laser', x: 300, y: 740, endX: 1500, endY: 740 },
       { 
         id: 's1', 
@@ -355,14 +375,16 @@ export const CAMPAIGN_LEVELS: LevelData[] = [
     goalY: 400,
     goalRadius: 40,
     bounds: { width: 1500, height: 800 },
-    targetTime: 8,
+    targetTime: 16,
+    starsRequired: 24,
+    rules: { maxHooks: 4, maxLaunches: 2, maxWallHits: 2, timeLimit: 50, hookRange: 300, floorIsLethal: true },
     nodes: [
       { id: 'n1', x: 150, y: 400, radius: 16, type: 'normal' },
       { id: 'n2', x: 500, y: 500, radius: 16, type: 'normal' },
       { id: 'n3', x: 950, y: 500, radius: 16, type: 'normal' }
     ],
     obstacles: [
-      { id: 'w1', type: 'wall', x: 0, y: 750, width: 1500, height: 50 },
+      { id: 'w1', type: 'wall', x: 0, y: 750, width: 1500, height: 50, lethal: true },
       { id: 'w2', type: 'wall', x: 0, y: 0, width: 1500, height: 50 },
       // Wind tunnels
       { id: 'wind1', type: 'wind', x: 300, y: 150, width: 150, height: 500, windDirection: { x: 0, y: -600 }, windStrength: 600 },
@@ -385,7 +407,9 @@ export const CAMPAIGN_LEVELS: LevelData[] = [
     goalY: 400,
     goalRadius: 45,
     bounds: { width: 1500, height: 800 },
-    targetTime: 9,
+    targetTime: 17,
+    starsRequired: 28,
+    rules: { maxHooks: 3, maxLaunches: 2, maxWallHits: 2, timeLimit: 50, hookRange: 290, floorIsLethal: true },
     nodes: [
       { id: 'n1', x: 150, y: 400, radius: 16, type: 'normal' },
       { 
@@ -417,7 +441,7 @@ export const CAMPAIGN_LEVELS: LevelData[] = [
       }
     ],
     obstacles: [
-      { id: 'w1', type: 'wall', x: 0, y: 750, width: 1500, height: 50 },
+      { id: 'w1', type: 'wall', x: 0, y: 750, width: 1500, height: 50, lethal: true },
       { id: 'l1', type: 'laser', x: 300, y: 740, endX: 1300, endY: 740 }
     ],
     collectibles: [
@@ -437,14 +461,16 @@ export const CAMPAIGN_LEVELS: LevelData[] = [
     goalY: 200,
     goalRadius: 40,
     bounds: { width: 1500, height: 800 },
-    targetTime: 8,
+    targetTime: 16,
+    starsRequired: 32,
+    rules: { maxHooks: 3, maxLaunches: 2, maxWallHits: 2, timeLimit: 50, hookRange: 290, floorIsLethal: true },
     nodes: [
       { id: 'n1', x: 150, y: 600, radius: 16, type: 'normal' },
       { id: 'n2', x: 400, y: 400, radius: 16, type: 'normal' },
       { id: 'n3', x: 1000, y: 250, radius: 16, type: 'normal' }
     ],
     obstacles: [
-      { id: 'w1', type: 'wall', x: 0, y: 750, width: 1500, height: 50 },
+      { id: 'w1', type: 'wall', x: 0, y: 750, width: 1500, height: 50, lethal: true },
       { id: 'w2', type: 'wall', x: 650, y: 0, width: 100, height: 800 }, // Solid dividing wall!
       // Portal pair A -> B
       { id: 'p_in', type: 'portal', x: 550, y: 550, radius: 45, portalTargetX: 800, portalTargetY: 200, portalColor: '#ec4899' },
@@ -467,7 +493,9 @@ export const CAMPAIGN_LEVELS: LevelData[] = [
     goalY: 400,
     goalRadius: 45,
     bounds: { width: 1500, height: 800 },
-    targetTime: 9,
+    targetTime: 17,
+    starsRequired: 36,
+    rules: { maxHooks: 3, maxLaunches: 2, maxWallHits: 1, timeLimit: 50, hookRange: 280, gravityScale: 0.72, floorIsLethal: true },
     nodes: [
       { id: 'n1', x: 150, y: 400, radius: 16, type: 'normal' },
       { id: 'n2', x: 550, y: 200, radius: 16, type: 'normal' },
@@ -475,7 +503,7 @@ export const CAMPAIGN_LEVELS: LevelData[] = [
       { id: 'n4', x: 950, y: 400, radius: 16, type: 'normal' }
     ],
     obstacles: [
-      { id: 'w1', type: 'wall', x: 0, y: 750, width: 1500, height: 50 },
+      { id: 'w1', type: 'wall', x: 0, y: 750, width: 1500, height: 50, lethal: true },
       { id: 'w2', type: 'wall', x: 0, y: 0, width: 1500, height: 50 },
       { id: 's1', type: 'sawblade', x: 750, y: 400, radius: 70 },
       { id: 'l1', type: 'laser', x: 750, y: 0, endX: 750, endY: 300 },
@@ -498,7 +526,9 @@ export const CAMPAIGN_LEVELS: LevelData[] = [
     goalY: 200,
     goalRadius: 50,
     bounds: { width: 1600, height: 800 },
-    targetTime: 14,
+    targetTime: 24,
+    starsRequired: 40,
+    rules: { maxHooks: 3, maxLaunches: 2, maxWallHits: 1, timeLimit: 60, hookRange: 280, floorIsLethal: true },
     nodes: [
       { id: 'n1', x: 150, y: 600, radius: 16, type: 'normal' },
       { 
@@ -514,7 +544,7 @@ export const CAMPAIGN_LEVELS: LevelData[] = [
       { id: 'n4', x: 1150, y: 350, radius: 16, type: 'normal' }
     ],
     obstacles: [
-      { id: 'w1', type: 'wall', x: 0, y: 750, width: 1600, height: 50 },
+      { id: 'w1', type: 'wall', x: 0, y: 750, width: 1600, height: 50, lethal: true },
       { id: 'l1', type: 'laser', x: 300, y: 740, endX: 1500, endY: 740 },
       { id: 's1', type: 'sawblade', x: 625, y: 400, radius: 55 },
       { id: 's2', type: 'sawblade', x: 975, y: 400, radius: 55 },
