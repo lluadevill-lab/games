@@ -4,22 +4,37 @@ Jogo de pêndulo/estilingue em canvas (React + TypeScript + Vite).
 
 ## Jogar no navegador (qualquer dispositivo)
 
-O build já vem pronto na pasta [`docs/`](./docs). Para publicar o link:
+O build já está commitado em [`docs/index.html`](./docs/index.html) e é um
+único arquivo HTML autocontido (~353 kB). Só falta ligar o GitHub Pages —
+são ~30 segundos e **precisa ser feito por você**, porque ativar o Pages
+exige permissão de administrador do repositório.
 
-1. Vá em **Settings → Pages** no repositório
-2. Em **Source**, escolha **Deploy from a branch**
-3. Selecione a branch `arena/019f9caf-games` e a pasta **`/docs`** → **Save**
+**Link direto para a configuração:**
+<https://github.com/lluadevill-lab/games/settings/pages>
 
-O link ficará disponível em:
+1. Em **Build and deployment → Source**, escolha **Deploy from a branch**
+2. Em **Branch**, selecione `arena/019f9caf-games` e a pasta **`/docs`**
+3. Clique em **Save** e aguarde ~1 minuto
+
+O jogo ficará no ar em:
 
 ```
 https://lluadevill-lab.github.io/games/
 ```
 
-Funciona em celular, tablet e desktop — é um único arquivo HTML autocontido
-(~353 kB), sem dependência de rede depois de carregado.
+Esse link abre em celular, tablet e desktop, sem instalar nada.
 
-> Depois de dar merge no PR, troque a branch do Pages para `main`.
+> Se preferir usar `main`: dê merge no PR #1 primeiro, depois selecione
+> a branch `main` + pasta `/docs` no mesmo menu.
+
+### Alternativas sem GitHub Pages
+
+- **Netlify Drop** — arraste o arquivo `docs/index.html` em
+  <https://app.netlify.com/drop> e o link sai na hora (não precisa de conta).
+- **Local pelo celular** — `npm run dev -- --host` e acesse o IP da sua
+  máquina pelo celular na mesma rede Wi-Fi.
+- **Offline** — baixe o `docs/index.html` e abra direto no navegador;
+  ele funciona sem servidor (`file://`), porque o JS e o CSS estão embutidos.
 
 ## Rodar localmente
 
