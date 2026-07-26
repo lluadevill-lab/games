@@ -13,7 +13,7 @@ exige permissão de administrador do repositório.
 <https://github.com/lluadevill-lab/games/settings/pages>
 
 1. Em **Build and deployment → Source**, escolha **Deploy from a branch**
-2. Em **Branch**, selecione `arena/019f9caf-games` e a pasta **`/docs`**
+2. Em **Branch**, selecione **`main`** e a pasta **`/docs`**
 3. Clique em **Save** e aguarde ~1 minuto
 
 O jogo ficará no ar em:
@@ -23,9 +23,6 @@ https://lluadevill-lab.github.io/games/
 ```
 
 Esse link abre em celular, tablet e desktop, sem instalar nada.
-
-> Se preferir usar `main`: dê merge no PR #1 primeiro, depois selecione
-> a branch `main` + pasta `/docs` no mesmo menu.
 
 ### Alternativas sem GitHub Pages
 
