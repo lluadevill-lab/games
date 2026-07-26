@@ -6,3 +6,6 @@ dist-ssr
 .vite
 
 # Build output (docs/ is committed intentionally for GitHub Pages)
+
+# TS incremental build info
+*.tsbuildinfo
