@@ -22,6 +22,16 @@ export interface AnchorNode {
   timer?: number;
   maxTimer?: number;
   broken?: boolean;
+  /**
+   * Limited-use anchors. When defined, the node can only be grabbed this many
+   * times before it burns out permanently, forcing route planning instead of
+   * re-grabbing the same safe anchor forever.
+   */
+  maxUses?: number;
+  usesLeft?: number;
+  /** Anchor cannot be re-grabbed until this cooldown (seconds) elapses. */
+  cooldown?: number;
+  cooldownLeft?: number;
 }
 
 export interface Obstacle {
@@ -32,6 +42,11 @@ export interface Obstacle {
   width?: number;
   height?: number;
   radius?: number;
+  /**
+   * Lethal surfaces kill on contact instead of bouncing.
+   * Used to make floors/ceilings a real threat rather than a free trampoline.
+   */
+  lethal?: boolean;
   // For lasers
   endX?: number;
   endY?: number;
@@ -57,6 +72,28 @@ export interface Collectible {
   collected?: boolean;
 }
 
+/**
+ * Per-level resource budget. This is the backbone of the difficulty design:
+ * the player is not limited by the clock alone but by a finite number of
+ * actions, so every hook and every launch has to be earned.
+ */
+export interface LevelRules {
+  /** Max rope attachments allowed for the whole run. undefined = unlimited. */
+  maxHooks?: number;
+  /** Max slingshot launches allowed for the whole run. undefined = unlimited. */
+  maxLaunches?: number;
+  /** Touching any floor/ground surface is instant death. */
+  floorIsLethal?: boolean;
+  /** Number of wall bounces tolerated before dying. undefined = unlimited. */
+  maxWallHits?: number;
+  /** Hard time limit in seconds. Running out is a loss, not just a lost star. */
+  timeLimit?: number;
+  /** Gravity multiplier for this level (1 = default). */
+  gravityScale?: number;
+  /** Max range at which the rope can grab an anchor (px). Lower = harder. */
+  hookRange?: number;
+}
+
 export interface LevelData {
   id: number;
   title: string;
@@ -75,6 +112,10 @@ export interface LevelData {
   obstacles: Obstacle[];
   collectibles: Collectible[];
   targetTime: number; // in seconds for gold medal
+  /** Difficulty budget. Omitted on tutorial levels. */
+  rules?: LevelRules;
+  /** Star cost to unlock this level, enforcing mastery before progression. */
+  starsRequired?: number;
 }
 
 export interface Particle {
@@ -106,6 +147,20 @@ export interface PlayerState {
   aimCurrY: number;
   trail: Vector2D[];
   combo: number;
+  /** Resource counters consumed during the run. */
+  hooksUsed: number;
+  launchesUsed: number;
+  wallHits: number;
+  /** Best combo achieved in the run, used for scoring/ranking. */
+  maxCombo: number;
+}
+
+/** Live resource snapshot pushed to the HUD each frame. */
+export interface RunResources {
+  hooksLeft: number | null;
+  launchesLeft: number | null;
+  wallHitsLeft: number | null;
+  timeLeft: number | null;
 }
 
 export interface SkinItem {

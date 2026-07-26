@@ -3,15 +3,19 @@ import {
   AnchorNode,
   Particle,
   LevelData,
-  GameSettings
+  LevelRules,
+  GameSettings,
+  RunResources
 } from '../types/game';
 import {
   GRAVITY,
   WALL_RESTITUTION,
+  DEFAULT_HOOK_RANGE,
   circleVsCircle,
   circleVsAABB,
   circleVsLineSegment,
   findNearestNode,
+  isNodeAvailable,
   updatePendulumPhysics,
   calculateSlingshotTrajectory,
   MAX_SLINGSHOT_PULL,
@@ -23,8 +27,23 @@ import { endlessGenerator } from './endless';
 export interface EngineCallbacks {
   onScoreChange: (score: number, coins: number, combo: number) => void;
   onHeightChange?: (height: number) => void;
-  onLevelWin: (stars: number, timeSpent: number) => void;
+  onLevelWin: (stars: number, timeSpent: number, stats: RunStats) => void;
   onGameOver: (reason: string, finalScore?: number, heightReached?: number) => void;
+  /** Pushes the live resource budget to the HUD. */
+  onResourcesChange?: (res: RunResources) => void;
+}
+
+/** End-of-run statistics used for star/medal awarding. */
+export interface RunStats {
+  hooksUsed: number;
+  launchesUsed: number;
+  wallHits: number;
+  maxCombo: number;
+  coins: number;
+  totalCoins: number;
+  score: number;
+  /** No wall contact and no damage taken for the entire run. */
+  flawless: boolean;
 }
 
 export class GameEngine {
@@ -48,6 +67,15 @@ export class GameEngine {
   private settings: GameSettings;
   private callbacks: EngineCallbacks;
 
+  /** Active difficulty budget for this level. */
+  private rules: LevelRules = {};
+  private gravityScale: number = 1;
+  private hookRange: number = DEFAULT_HOOK_RANGE;
+  /** Rising urgency in endless mode; also drives hazard density. */
+  private endlessIntensity: number = 0;
+  private lastResourceSignature: string = '';
+  private lastCountdownTick: number = -1;
+
   // Input state
   private isMouseDown: boolean = false;
   private isSpaceDown: boolean = false;
@@ -69,6 +97,17 @@ export class GameEngine {
     this.settings = settings;
     this.isEndless = isEndless;
     this.callbacks = callbacks;
+
+    // Resolve the difficulty budget for this run.
+    this.rules = this.level.rules ?? {};
+    this.gravityScale = this.rules.gravityScale ?? 1;
+    this.hookRange = this.rules.hookRange ?? DEFAULT_HOOK_RANGE;
+
+    // Initialize per-node use limits declared by the level.
+    for (const node of this.level.nodes) {
+      if (node.maxUses !== undefined) node.usesLeft = node.maxUses;
+      if (node.cooldown !== undefined) node.cooldownLeft = 0;
+    }
 
     // Initialize player
     this.player = this.createInitialPlayerState();
@@ -118,8 +157,63 @@ export class GameEngine {
       aimCurrX: 0,
       aimCurrY: 0,
       trail: [],
-      combo: 0
+      combo: 0,
+      hooksUsed: 0,
+      launchesUsed: 0,
+      wallHits: 0,
+      maxCombo: 0
     };
+  }
+
+  // =================== RESOURCE BUDGET ===================
+
+  /** Remaining rope attachments, or null when unlimited. */
+  private hooksLeft(): number | null {
+    if (this.rules.maxHooks === undefined) return null;
+    return Math.max(0, this.rules.maxHooks - this.player.hooksUsed);
+  }
+
+  /** Remaining slingshot launches, or null when unlimited. */
+  private launchesLeft(): number | null {
+    if (this.rules.maxLaunches === undefined) return null;
+    return Math.max(0, this.rules.maxLaunches - this.player.launchesUsed);
+  }
+
+  /** Remaining tolerated wall bounces, or null when unlimited. */
+  private wallHitsLeft(): number | null {
+    if (this.rules.maxWallHits === undefined) return null;
+    return Math.max(0, this.rules.maxWallHits - this.player.wallHits);
+  }
+
+  private timeLeft(): number | null {
+    if (this.rules.timeLimit === undefined) return null;
+    return Math.max(0, this.rules.timeLimit - this.timeSpent);
+  }
+
+  /** Pushes resources to the HUD, but only when a displayed value changed. */
+  private emitResources(force = false) {
+    if (!this.callbacks.onResourcesChange) return;
+    const timeLeft = this.timeLeft();
+    const res: RunResources = {
+      hooksLeft: this.hooksLeft(),
+      launchesLeft: this.launchesLeft(),
+      wallHitsLeft: this.wallHitsLeft(),
+      timeLeft
+    };
+    // Throttle: time is rendered with one decimal, so key on that precision.
+    const sig = `${res.hooksLeft}|${res.launchesLeft}|${res.wallHitsLeft}|${
+      timeLeft === null ? 'x' : timeLeft.toFixed(1)
+    }`;
+    if (!force && sig === this.lastResourceSignature) return;
+    this.lastResourceSignature = sig;
+    this.callbacks.onResourcesChange(res);
+  }
+
+  /** Floating warning text + audio cue when a resource is spent. */
+  private warnResource(label: string, left: number) {
+    const color = left === 0 ? '#f43f5e' : left <= 1 ? '#fb923c' : '#fbbf24';
+    this.addParticle(this.player.x, this.player.y - 34, 0, -46, 15, color, 'text', `${label}: ${left}`);
+    if (left <= 1) soundManager.playWarning();
   }
 
   public start() {
@@ -131,6 +225,7 @@ export class GameEngine {
     if (this.settings.musicEnabled) {
       soundManager.startMusic();
     }
+    this.emitResources(true);
     this.loop(this.lastTime);
   }
 
@@ -332,9 +427,11 @@ export class GameEngine {
   private handleActionPress() {
     if (this.player.state === 'flying') {
       // Spider-Man Hook mid-air!
-      const nearest = findNearestNode(this.player, this.level.nodes, 480);
+      const nearest = findNearestNode(this.player, this.level.nodes, this.hookRange);
       if (nearest) {
         this.attachToNode(nearest);
+      } else {
+        this.reportMissedHook();
       }
     } else if (this.player.state === 'hooked') {
       // Release from hook
@@ -359,7 +456,7 @@ export class GameEngine {
       soundManager.startStretchSound();
     } else if (this.player.state === 'flying') {
       // Check if clicked near an anchor node or just click anywhere to grapple nearest
-      const nearest = findNearestNode(this.player, this.level.nodes, 520);
+      const nearest = findNearestNode(this.player, this.level.nodes, this.hookRange);
       if (nearest) {
         this.attachToNode(nearest);
         // Also immediately allow slingshot aim if user keeps holding!
@@ -391,6 +488,15 @@ export class GameEngine {
       const pullDist = Math.hypot(dx, dy);
 
       if (pullDist > 15) {
+        // Enforce the run-wide launch budget.
+        const launchesAvailable = this.launchesLeft();
+        if (launchesAvailable !== null && launchesAvailable <= 0) {
+          soundManager.playFail();
+          this.addParticle(this.player.x, this.player.y - 28, 0, -44, 15, '#f43f5e', 'text', 'SEM IMPULSOS!');
+          this.player.state = this.player.hookedNodeId ? 'hooked' : 'flying';
+          return;
+        }
+
         // Launch slingshot!
         const angle = Math.atan2(dy, dx);
         const powerRatio = Math.min(1.0, pullDist / MAX_SLINGSHOT_PULL);
@@ -399,12 +505,23 @@ export class GameEngine {
         this.player.vx = Math.cos(angle) * speed;
         this.player.vy = Math.sin(angle) * speed;
         this.player.state = 'flying';
+
+        // Releasing into a launch also puts the anchor on cooldown.
+        const src = this.level.nodes.find(n => n.id === this.player.hookedNodeId);
+        if (src && src.cooldown !== undefined) src.cooldownLeft = src.cooldown;
         this.player.hookedNodeId = null;
+
+        this.player.launchesUsed++;
+        const remaining = this.launchesLeft();
+        if (remaining !== null && remaining <= 2) {
+          this.warnResource('IMPULSOS', remaining);
+        }
+        this.emitResources();
 
         soundManager.playLaunch(powerRatio);
         this.addShake(8 * powerRatio);
         this.createExplosion(this.player.x, this.player.y, '#38bdf8', 15);
-        
+
         // Add flying text if max power
         if (powerRatio > 0.9) {
           this.addParticle(this.player.x, this.player.y - 20, 0, -40, 16, '#f43f5e', 'text', 'PERFECT SLING!');
@@ -422,17 +539,51 @@ export class GameEngine {
     }
   }
 
+  /** Feedback when the player fires the rope with nothing in range. */
+  private reportMissedHook() {
+    soundManager.playFail();
+    this.addParticle(this.player.x, this.player.y - 28, 0, -40, 14, '#94a3b8', 'text', 'FORA DE ALCANCE');
+  }
+
   private attachToNode(node: AnchorNode) {
+    // Enforce the run-wide hook budget before committing the grab.
+    const left = this.hooksLeft();
+    if (left !== null && left <= 0) {
+      soundManager.playFail();
+      this.addParticle(this.player.x, this.player.y - 28, 0, -44, 15, '#f43f5e', 'text', 'SEM GANCHOS!');
+      return;
+    }
+    if (!isNodeAvailable(node)) {
+      this.reportMissedHook();
+      return;
+    }
+
     this.player.hookedNodeId = node.id;
     this.player.state = 'hooked';
     const dist = Math.hypot(this.player.x - node.x, this.player.y - node.y);
     this.player.restLength = Math.max(60, dist);
     this.player.ropeLength = dist;
     this.player.combo++;
-    
+    this.player.maxCombo = Math.max(this.player.maxCombo, this.player.combo);
+
+    // Consume resources: the global hook budget and the node's own durability.
+    this.player.hooksUsed++;
+    if (node.usesLeft !== undefined) {
+      node.usesLeft--;
+      if (node.usesLeft <= 0) {
+        this.addParticle(node.x, node.y - 24, 0, -30, 13, '#f97316', 'text', 'GASTO');
+      }
+    }
+
     soundManager.playHook();
     this.addShake(3);
     this.createExplosion(node.x, node.y, '#a855f7', 12);
+
+    const remaining = this.hooksLeft();
+    if (remaining !== null && remaining <= 3) {
+      this.warnResource('GANCHOS', remaining);
+    }
+    this.emitResources();
 
     if (this.player.combo >= 2) {
       const bonus = 50 * this.player.combo;
@@ -444,6 +595,11 @@ export class GameEngine {
 
   private detachFromNode() {
     if (this.player.state === 'hooked' || this.player.state === 'aiming') {
+      // Start the anchor's cooldown so it can't be immediately re-grabbed.
+      const prev = this.level.nodes.find(n => n.id === this.player.hookedNodeId);
+      if (prev && prev.cooldown !== undefined) {
+        prev.cooldownLeft = prev.cooldown;
+      }
       this.player.state = 'flying';
       this.player.hookedNodeId = null;
       soundManager.playRelease();
@@ -466,6 +622,24 @@ export class GameEngine {
   private update(dt: number) {
     this.timeSpent += dt;
 
+    // Hard time limit: running out of clock ends the run.
+    const remainingTime = this.timeLeft();
+    if (remainingTime !== null) {
+      if (remainingTime <= 0) {
+        this.triggerGameOver('O tempo acabou!');
+        return;
+      }
+      // Audible countdown over the last 3 seconds.
+      if (remainingTime <= 3) {
+        const tick = Math.ceil(remainingTime);
+        if (tick !== this.lastCountdownTick) {
+          this.lastCountdownTick = tick;
+          soundManager.playWarning();
+        }
+      }
+    }
+    this.emitResources();
+
     // Decay screen shake
     if (this.shake > 0) {
       this.shake = Math.max(0, this.shake - dt * 45);
@@ -473,6 +647,10 @@ export class GameEngine {
 
     // Update moving anchor nodes and fragile nodes
     for (const node of this.level.nodes) {
+      // Tick anchor re-grab cooldowns.
+      if (node.cooldownLeft !== undefined && node.cooldownLeft > 0) {
+        node.cooldownLeft = Math.max(0, node.cooldownLeft - dt);
+      }
       if (node.type === 'moving' && node.movePath && node.movePath.length >= 2) {
         node.moveProgress = (node.moveProgress || 0) + (node.moveSpeed || 100) * dt;
         const p1 = node.movePath[0];
@@ -514,7 +692,13 @@ export class GameEngine {
     if (this.player.state === 'hooked' || this.player.state === 'aiming') {
       const node = this.level.nodes.find(n => n.id === this.player.hookedNodeId);
       if (node && !node.broken) {
-        updatePendulumPhysics(this.player, node, dt, this.isDownKey || (this.isSpaceDown && this.player.state === 'hooked'));
+        updatePendulumPhysics(
+          this.player,
+          node,
+          dt,
+          this.isDownKey || (this.isSpaceDown && this.player.state === 'hooked'),
+          this.gravityScale
+        );
       } else {
         this.detachFromNode();
       }
@@ -524,7 +708,7 @@ export class GameEngine {
       if (this.isRightKey) this.player.vx += 350 * dt;
 
       // Gravity
-      this.player.vy += GRAVITY * dt;
+      this.player.vy += GRAVITY * this.gravityScale * dt;
       this.player.vx *= 0.999;
       this.player.vy *= 0.999;
 
@@ -551,9 +735,25 @@ export class GameEngine {
         this.level.collectibles
       );
 
-      // Rising plasma laser speed increases with height
-      const plasmaSpeed = 50 + Math.min(150, (this.level.startY - this.player.y) * 0.02);
-      this.plasmaY -= plasmaSpeed * dt;
+      /*
+       * The plasma wall is the pacing engine of endless mode. It now scales
+       * with BOTH height and elapsed time, so camping in a safe pocket is no
+       * longer viable — the wall eventually catches any stationary player.
+       */
+      const heightM = Math.max(0, (this.level.startY - this.player.y) / 10);
+      this.endlessIntensity = heightM / 100 + this.timeSpent / 45;
+
+      const plasmaSpeed =
+        95 + // faster baseline (was 50)
+        Math.min(210, heightM * 0.55) + // height pressure
+        Math.min(120, this.timeSpent * 1.6); // anti-camping time pressure
+
+      // Catch-up: if the player pulls far ahead, the wall accelerates to keep
+      // the screen tense instead of letting the run go on cruise control.
+      const gap = this.plasmaY - (this.player.y + this.canvas.height * 0.45);
+      const catchUp = gap > 0 ? Math.min(260, gap * 0.55) : 0;
+
+      this.plasmaY -= (plasmaSpeed + catchUp) * dt;
 
       // If ball touches rising plasma -> Game Over!
       if (this.player.y + this.player.radius >= this.plasmaY) {
@@ -587,6 +787,14 @@ export class GameEngine {
           obs.height || 10
         );
         if (res.collision && res.penetration > 0) {
+          // Electrified / lethal surfaces kill instantly. Levels mark their
+          // floor as lethal so the ground is a hazard, not a safety net.
+          const isFloorContact = res.normalY < -0.5;
+          if (obs.lethal || (this.rules.floorIsLethal && isFloorContact)) {
+            this.triggerGameOver('Você tocou o solo eletrificado!');
+            return;
+          }
+
           this.player.x += res.normalX * res.penetration;
           this.player.y += res.normalY * res.penetration;
 
@@ -598,6 +806,19 @@ export class GameEngine {
             soundManager.playBounce();
             this.addShake(4);
             this.createExplosion(this.player.x, this.player.y, '#93c5fd', 8);
+
+            // Wall contact costs a strike when the level limits bounces.
+            this.player.wallHits++;
+            const hitsLeft = this.wallHitsLeft();
+            if (hitsLeft !== null) {
+              if (hitsLeft <= 0) {
+                this.triggerGameOver('Impactos na parede demais!');
+                return;
+              }
+              this.warnResource('BATIDAS', hitsLeft);
+              this.emitResources();
+            }
+
             // Touch wall resets combo!
             if (this.player.combo > 0) {
               this.player.combo = 0;
@@ -769,19 +990,38 @@ export class GameEngine {
     this.addShake(12);
     this.createExplosion(this.level.goalX, this.level.goalY, '#facc15', 50);
 
-    // Calculate stars: 1 for completion, 1 for collecting all stars/coins, 1 for fast time!
+    /*
+     * Star awarding is deliberately demanding: finishing the level is the
+     * entry ticket, not a 3-star result. The 2nd star requires full collection
+     * AND a clean run (no wall impacts); the 3rd requires beating target time.
+     */
     let stars = 1;
     const totalCoins = this.level.collectibles.length;
-    if (totalCoins === 0 || this.coinsCollected >= totalCoins) {
-      stars++;
+    const allCollected = totalCoins === 0 || this.coinsCollected >= totalCoins;
+    const flawless = this.player.wallHits === 0;
+
+    if (allCollected && flawless) stars++;
+    if (this.timeSpent <= this.level.targetTime && allCollected) stars++;
+
+    if (flawless && stars >= 2) {
+      soundManager.playPerfect();
+      this.addParticle(this.player.x, this.player.y - 40, 0, -50, 20, '#22d3ee', 'text', 'IMPECÁVEL!');
     }
-    if (this.timeSpent <= this.level.targetTime) {
-      stars++;
-    }
+
+    const stats: RunStats = {
+      hooksUsed: this.player.hooksUsed,
+      launchesUsed: this.player.launchesUsed,
+      wallHits: this.player.wallHits,
+      maxCombo: this.player.maxCombo,
+      coins: this.coinsCollected,
+      totalCoins,
+      score: this.score,
+      flawless
+    };
 
     setTimeout(() => {
       this.stop();
-      this.callbacks.onLevelWin(stars, this.timeSpent);
+      this.callbacks.onLevelWin(stars, this.timeSpent, stats);
     }, 900);
   }
 
@@ -894,11 +1134,32 @@ export class GameEngine {
     // Draw Walls and Bumpers
     for (const obs of this.level.obstacles) {
       if (obs.type === 'wall') {
-        this.ctx.fillStyle = '#1e293b';
-        this.ctx.strokeStyle = '#3b82f6';
+        // Lethal surfaces are tinted red and marked with an energy crackle so
+        // the player can always tell a killer floor from a safe wall.
+        const deadly = obs.lethal === true;
+        this.ctx.fillStyle = deadly ? '#3b0d18' : '#1e293b';
+        this.ctx.strokeStyle = deadly ? '#f43f5e' : '#3b82f6';
         this.ctx.lineWidth = 2;
         this.ctx.fillRect(obs.x, obs.y, obs.width || 10, obs.height || 10);
         this.ctx.strokeRect(obs.x, obs.y, obs.width || 10, obs.height || 10);
+
+        if (deadly) {
+          this.ctx.save();
+          this.ctx.strokeStyle = '#fb7185';
+          this.ctx.lineWidth = 2;
+          this.ctx.shadowColor = '#f43f5e';
+          this.ctx.shadowBlur = 12;
+          this.ctx.beginPath();
+          const step = 22;
+          const t = performance.now() / 120;
+          for (let sx = obs.x; sx < obs.x + (obs.width || 10); sx += step) {
+            const y1 = obs.y + 5 + Math.sin(sx / 30 + t) * 4;
+            this.ctx.lineTo(sx, y1);
+            this.ctx.lineTo(sx + step / 2, y1 + 7);
+          }
+          this.ctx.stroke();
+          this.ctx.restore();
+        }
 
         // Grid pattern on walls
         this.ctx.strokeStyle = 'rgba(59, 130, 246, 0.15)';
@@ -1009,8 +1270,27 @@ export class GameEngine {
       if (node.type === 'moving') color = '#a855f7';
       if (node.type === 'fragile') color = '#f97316';
 
+      // Spent or cooling anchors are dimmed so the player can read the board.
+      const available = isNodeAvailable(node);
+      const isSpent = node.usesLeft !== undefined && node.usesLeft <= 0;
+
       this.ctx.save();
       this.ctx.translate(node.x, node.y);
+      if (!available) this.ctx.globalAlpha = 0.32;
+
+      // Grab-range indicator on the nearest reachable anchor while airborne.
+      if (this.player.state === 'flying' && available) {
+        const d = Math.hypot(this.player.x - node.x, this.player.y - node.y);
+        if (d < this.hookRange) {
+          this.ctx.strokeStyle = 'rgba(34, 211, 238, 0.55)';
+          this.ctx.lineWidth = 2;
+          this.ctx.setLineDash([4, 6]);
+          this.ctx.beginPath();
+          this.ctx.arc(0, 0, node.radius * 2.1, 0, Math.PI * 2);
+          this.ctx.stroke();
+          this.ctx.setLineDash([]);
+        }
+      }
 
       // Pulse ring
       const pulse = 1 + Math.sin(performance.now() / 150) * 0.15;
@@ -1027,6 +1307,44 @@ export class GameEngine {
       this.ctx.beginPath();
       this.ctx.arc(0, 0, node.radius, 0, Math.PI * 2);
       this.ctx.fill();
+
+      // Remaining uses as orbiting pips around limited anchors.
+      if (node.maxUses !== undefined && !isSpent) {
+        const left = node.usesLeft ?? node.maxUses;
+        this.ctx.shadowBlur = 0;
+        this.ctx.fillStyle = '#fbbf24';
+        for (let u = 0; u < left; u++) {
+          const a = -Math.PI / 2 + (u / Math.max(1, node.maxUses)) * Math.PI * 2;
+          this.ctx.beginPath();
+          this.ctx.arc(Math.cos(a) * (node.radius + 11), Math.sin(a) * (node.radius + 11), 3, 0, Math.PI * 2);
+          this.ctx.fill();
+        }
+      }
+
+      // Cooldown sweep on anchors waiting to recharge.
+      if (node.cooldown && node.cooldownLeft && node.cooldownLeft > 0) {
+        const prog = node.cooldownLeft / node.cooldown;
+        this.ctx.strokeStyle = '#64748b';
+        this.ctx.lineWidth = 3;
+        this.ctx.shadowBlur = 0;
+        this.ctx.beginPath();
+        this.ctx.arc(0, 0, node.radius + 6, -Math.PI / 2, -Math.PI / 2 + prog * Math.PI * 2);
+        this.ctx.stroke();
+      }
+
+      // Burnt-out anchors get a clear "X".
+      if (isSpent) {
+        this.ctx.strokeStyle = '#ef4444';
+        this.ctx.lineWidth = 3;
+        this.ctx.shadowBlur = 0;
+        const s = node.radius * 0.6;
+        this.ctx.beginPath();
+        this.ctx.moveTo(-s, -s);
+        this.ctx.lineTo(s, s);
+        this.ctx.moveTo(s, -s);
+        this.ctx.lineTo(-s, s);
+        this.ctx.stroke();
+      }
 
       // If fragile, draw timer arc if active
       if (node.type === 'fragile' && isHooked && node.timer !== undefined && node.maxTimer) {

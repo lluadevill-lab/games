@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Play, RotateCcw, Pause, Home, Star, Trophy, Clock, Zap, ShieldAlert, ArrowRight } from 'lucide-react';
+import { Play, RotateCcw, Pause, Home, Star, Trophy, Clock, Zap, ShieldAlert, ArrowRight, Anchor, Rocket } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { LevelData, GameSettings, LevelProgress, HighScoreEntry } from '../types/game';
+import { LevelData, GameSettings, LevelProgress, HighScoreEntry, RunResources } from '../types/game';
 import { GameEngine } from '../game/engine';
 import { soundManager } from '../utils/sound';
 
@@ -36,6 +36,13 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const [combo, setCombo] = useState<number>(0);
   const [heightReached, setHeightReached] = useState<number>(0);
   const [timeSpent, setTimeSpent] = useState<number>(0);
+  // Live resource budget (hooks / launches / wall hits / time limit).
+  const [resources, setResources] = useState<RunResources>({
+    hooksLeft: null,
+    launchesLeft: null,
+    wallHitsLeft: null,
+    timeLeft: null
+  });
 
   // Modals state
   const [isPaused, setIsPaused] = useState<boolean>(false);
@@ -92,6 +99,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         onHeightChange: (newHeight) => {
           setHeightReached(newHeight);
         },
+        onResourcesChange: setResources,
         onLevelWin: (stars, finalTime) => {
           setWinInfo({ stars, time: finalTime });
           onAddCoins(coinsInSession + stars * 50);
@@ -182,6 +190,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
           onHeightChange: (newHeight) => {
             setHeightReached(newHeight);
           },
+          onResourcesChange: setResources,
           onLevelWin: (stars, finalTime) => {
             setWinInfo({ stars, time: finalTime });
             onAddCoins(coinsInSession + stars * 50);
@@ -249,11 +258,68 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
               <Trophy className="w-4 h-4" />
               <span>{heightReached} m</span>
             </div>
+          ) : resources.timeLeft !== null ? (
+            /* Hard time limit: count DOWN and flash red in the final seconds. */
+            <div
+              className={`flex items-center gap-1.5 ${
+                resources.timeLeft <= 5 ? 'text-rose-400 animate-pulse' : 'text-slate-300'
+              }`}
+              title="Tempo Restante"
+            >
+              <Clock className="w-4 h-4 text-indigo-400" />
+              <span>{resources.timeLeft.toFixed(1)}s</span>
+              <span className="text-[11px] text-slate-500 font-normal">alvo {level.targetTime}s</span>
+            </div>
           ) : (
             <div className="flex items-center gap-1.5 text-slate-300" title="Tempo Decorrido">
               <Clock className="w-4 h-4 text-indigo-400" />
               <span>{timeSpent.toFixed(1)}s</span>
               <span className="text-[11px] text-slate-500 font-normal">/ {level.targetTime}s</span>
+            </div>
+          )}
+
+          {/* Resource budget: the core of the difficulty design. */}
+          {resources.hooksLeft !== null && (
+            <div
+              className={`flex items-center gap-1.5 ${
+                resources.hooksLeft === 0
+                  ? 'text-rose-500 animate-pulse'
+                  : resources.hooksLeft <= 1
+                  ? 'text-orange-400'
+                  : 'text-cyan-300'
+              }`}
+              title="Ganchos restantes"
+            >
+              <Anchor className="w-4 h-4" />
+              <span>{resources.hooksLeft}</span>
+            </div>
+          )}
+
+          {resources.launchesLeft !== null && (
+            <div
+              className={`flex items-center gap-1.5 ${
+                resources.launchesLeft === 0
+                  ? 'text-rose-500 animate-pulse'
+                  : resources.launchesLeft <= 1
+                  ? 'text-orange-400'
+                  : 'text-violet-300'
+              }`}
+              title="Impulsos (estilingue) restantes"
+            >
+              <Rocket className="w-4 h-4" />
+              <span>{resources.launchesLeft}</span>
+            </div>
+          )}
+
+          {resources.wallHitsLeft !== null && (
+            <div
+              className={`hidden sm:flex items-center gap-1.5 ${
+                resources.wallHitsLeft <= 1 ? 'text-rose-400' : 'text-slate-300'
+              }`}
+              title="Batidas em parede restantes"
+            >
+              <ShieldAlert className="w-4 h-4" />
+              <span>{resources.wallHitsLeft}</span>
             </div>
           )}
 

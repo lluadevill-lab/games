@@ -36,6 +36,9 @@ export const StartScreen: React.FC<StartScreenProps> = ({
     };
   };
 
+  // Total stars earned across the campaign — the currency that gates progress.
+  const totalStars = progress.reduce((acc, p) => acc + (p.stars || 0), 0);
+
   const currentLevels = activeTab <= 3 
     ? CAMPAIGN_LEVELS.filter(l => l.world === activeTab)
     : COMMUNITY_LEVELS;
@@ -169,7 +172,12 @@ export const StartScreen: React.FC<StartScreenProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
             {currentLevels.map((lvl, index) => {
               const prog = getLevelProgress(lvl.id);
-              const isLocked = activeTab <= 3 && lvl.id > 1 && !progress.some(p => p.levelId === lvl.id - 1 && p.completed);
+              // Progression now demands mastery: beating the previous level is
+              // not enough, the player must also have farmed enough stars.
+              const prevCleared = lvl.id === 1 || progress.some(p => p.levelId === lvl.id - 1 && p.completed);
+              const starsNeeded = lvl.starsRequired ?? 0;
+              const missingStars = Math.max(0, starsNeeded - totalStars);
+              const isLocked = activeTab <= 3 && (!prevCleared || missingStars > 0);
 
               return (
                 <div
@@ -221,9 +229,37 @@ export const StartScreen: React.FC<StartScreenProps> = ({
                   </div>
 
                   {/* Description */}
-                  <p className="text-slate-400 text-xs line-clamp-2 mb-4 min-h-[32px]">
-                    {lvl.description || 'Atravesse o percurso de pêndulo no tempo limite!'}
+                  <p className="text-slate-400 text-xs line-clamp-2 mb-3 min-h-[32px]">
+                    {isLocked && missingStars > 0
+                      ? `Bloqueado: faltam ${missingStars} ⭐ para liberar esta fase.`
+                      : lvl.description || 'Atravesse o percurso de pêndulo no tempo limite!'}
                   </p>
+
+                  {/* Difficulty budget preview, so the player knows the rules up front. */}
+                  {lvl.rules && !isLocked && (
+                    <div className="flex flex-wrap items-center gap-1.5 mb-3">
+                      {lvl.rules.maxHooks !== undefined && (
+                        <span className="px-2 py-0.5 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-[10px] font-bold">
+                          {lvl.rules.maxHooks} ganchos
+                        </span>
+                      )}
+                      {lvl.rules.maxLaunches !== undefined && (
+                        <span className="px-2 py-0.5 rounded-lg bg-violet-500/10 border border-violet-500/30 text-violet-300 text-[10px] font-bold">
+                          {lvl.rules.maxLaunches} impulsos
+                        </span>
+                      )}
+                      {lvl.rules.timeLimit !== undefined && (
+                        <span className="px-2 py-0.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[10px] font-bold">
+                          {lvl.rules.timeLimit}s limite
+                        </span>
+                      )}
+                      {lvl.rules.floorIsLethal && (
+                        <span className="px-2 py-0.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-[10px] font-bold">
+                          chão letal
+                        </span>
+                      )}
+                    </div>
+                  )}
 
                   {/* Bottom: Info & Play button */}
                   <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
