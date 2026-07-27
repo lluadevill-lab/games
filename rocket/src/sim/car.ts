@@ -36,6 +36,9 @@ const tmp = v3();
 const tmp2 = v3();
 const contactN = v3();
 const wheelPos = v3();
+const wheelVel = v3();
+const wheelImpulse = v3();
+const lever = v3();
 const localWheel = v3();
 const _q = quat();
 
@@ -52,17 +55,26 @@ const WHEELS: readonly [number, number][] = [
  * Define car.onGround e car.groundNormal (média das normais em contato).
  */
 export function sampleSuspension(car: Car): number {
+  // Limpa a telemetria visual/física a cada amostra.
+  for (let i = 0; i < 4; i++) {
+    car.wheelCompression[i] = 0;
+    car.wheelContact[i] = false;
+  }
+
   if (car.groundSuppress > 0) {
     car.onGround = false;
     return Infinity;
   }
+
   let contacts = 0;
+  let compressedContacts = 0;
   let nx = 0,
     ny = 0,
     nz = 0;
   let minDist = Infinity;
 
-  for (const [lx, ly] of WHEELS) {
+  for (let i = 0; i < WHEELS.length; i++) {
+    const [lx, ly] = WHEELS[i];
     set(localWheel, lx, ly, K.WHEEL_Z);
     qRotate(wheelPos, car.rot, localWheel);
     wheelPos.x += car.pos.x;
@@ -70,11 +82,16 @@ export function sampleSuspension(car: Car): number {
     wheelPos.z += car.pos.z;
     const d = arenaDistance(wheelPos.x, wheelPos.y, wheelPos.z, contactN);
     if (d < minDist) minDist = d;
+
     if (d < K.WHEEL_RADIUS + K.SUSPENSION_TRAVEL) {
       contacts++;
       nx += contactN.x;
       ny += contactN.y;
       nz += contactN.z;
+      car.wheelContact[i] = true;
+      // 0 = roda só encostando; 1 = suspensão bem comprimida.
+      car.wheelCompression[i] = clamp((K.WHEEL_RADIUS - d) / K.SUSPENSION_TRAVEL, 0, 1);
+      if (d < K.WHEEL_RADIUS + K.SUSPENSION_TRAVEL * 0.7) compressedContacts++;
     }
   }
 
@@ -84,7 +101,7 @@ export function sampleSuspension(car: Car): number {
   }
   // Precisa de 3 rodas apoiadas E a suspensão razoavelmente comprimida.
   // Com as rodas quase estendidas o carro já está "no ar" para o gameplay.
-  car.onGround = contacts >= 3 && minDist < K.WHEEL_RADIUS + K.SUSPENSION_TRAVEL * 0.7;
+  car.onGround = contacts >= 3 && compressedContacts >= 3;
   return minDist;
 }
 
@@ -95,22 +112,48 @@ export function sampleSuspension(car: Car): number {
  * tempo — isso conta o impacto duas vezes e o carro sai quicando pelo campo.
  * Aqui a mola devolve no máximo a velocidade necessária para assentar.
  */
-function applySuspension(car: Car, minDist: number, dt: number): void {
-  if (!car.onGround) return;
-  const n = car.groundNormal;
-  const err = K.WHEEL_RADIUS - minDist; // >0 = comprimida
-  const vn = dot(car.vel, n);
+function applySuspension(car: Car, _minDist: number, dt: number): void {
+  if (car.groundSuppress > 0) return;
 
-  // Velocidade normal desejada: fecha a folga sem ultrapassar.
-  const targetVn = clamp(err * 14, -120, 120);
-  const dv = targetVn - vn;
-  // A suspensão só empurra para fora; a gravidade cuida do resto.
-  const maxPush = 5200 * dt;
-  addScaled(car.vel, n, clamp(dv, -maxPush, maxPush));
+  // Modelo por roda: cada contato mede a velocidade no ponto da roda
+  // (velocidade linear + angular), aplica mola/amortecedor na normal e
+  // transforma parte do impulso em torque. É bem mais estável/legível que
+  // uma correção única pelo menor ponto da hitbox e dá sensação de mola real.
+  for (let i = 0; i < WHEELS.length; i++) {
+    if (!car.wheelContact[i]) continue;
+    const [lx, ly] = WHEELS[i];
+    set(localWheel, lx, ly, K.WHEEL_Z);
+    qRotate(lever, car.rot, localWheel);
+    set(wheelPos, car.pos.x + lever.x, car.pos.y + lever.y, car.pos.z + lever.z);
+    const d = arenaDistance(wheelPos.x, wheelPos.y, wheelPos.z, contactN);
+    if (d >= K.WHEEL_RADIUS) continue;
+
+    // velocidade do ponto: v + ω × r
+    cross(wheelVel, car.ang, lever);
+    wheelVel.x += car.vel.x;
+    wheelVel.y += car.vel.y;
+    wheelVel.z += car.vel.z;
+
+    const compression = K.WHEEL_RADIUS - d;
+    const vn = dot(wheelVel, contactN);
+    const targetVn = clamp(compression * K.SUSPENSION_STIFFNESS, 0, 160);
+    const dv = (targetVn - vn * K.SUSPENSION_DAMPING) * 0.25;
+    const push = clamp(dv, 0, K.SUSPENSION_MAX_PUSH * dt);
+    if (push <= 0) continue;
+
+    copy(wheelImpulse, contactN);
+    scale(wheelImpulse, push);
+    addScaled(car.vel, wheelImpulse, 1);
+
+    // Torque aproximado pela alavanca da roda. O fator pequeno substitui uma
+    // matriz de inércia completa e evita quicar/virar o carro em PCs fracos.
+    cross(tmp2, lever, wheelImpulse);
+    addScaled(car.ang, tmp2, K.SUSPENSION_TORQUE_RESPONSE);
+  }
 
   // sticky force: só perto da superfície. É o que permite parede e teto.
-  if (minDist < K.WHEEL_RADIUS + 8) {
-    addScaled(car.vel, n, -K.STICKY_ACCEL * dt);
+  if (car.onGround) {
+    addScaled(car.vel, car.groundNormal, -K.STICKY_ACCEL * dt);
   }
 }
 
@@ -285,22 +328,25 @@ function handleJump(car: Car, inp: CarInput, dt: number, events: SimEvent[]): vo
 
         forwardOf(fwd, car.rot);
         rightOf(right, car.rot);
-        // impulso horizontal no plano do mundo
+        // Impulso direcional no plano horizontal do mundo. Antes o vetor
+        // podia ficar fraco quando o carro estava muito inclinado; agora
+        // projetamos os eixos e temos fallback robusto.
         set(tmp, 0, 0, 0);
+        fwd.z = 0;
+        right.z = 0;
+        if (len(fwd) < 1e-4) set(fwd, Math.cos(0), Math.sin(0), 0);
+        else normalize(fwd);
+        if (len(right) < 1e-4) set(right, fwd.y, -fwd.x, 0);
+        else normalize(right);
         addScaled(tmp, fwd, ux);
         addScaled(tmp, right, uy);
-        tmp.z = 0;
+        if (len(tmp) < 1e-4) copy(tmp, fwd);
         normalize(tmp);
 
-        // front flip acelera, back flip freia e sobe
-        const vh = Math.hypot(car.vel.x, car.vel.y);
-        let impulse = K.DODGE_IMPULSE;
-        if (ux < -0.3) {
-          impulse = K.DODGE_IMPULSE * 0.9;
-          car.vel.z += 60;
-        } else if (ux > 0.3 && vh > K.DRIVE_MAX_SPEED) {
-          impulse *= 0.5; // já rápido: ganho menor
-        }
+        // O dodge do RL tem um "pop" vertical e uma janela de gravidade
+        // suavizada; sem isso front/back/side flip parecem só uma rotação.
+        const impulse = K.DODGE_IMPULSE * (Math.abs(ux) > 0.75 || Math.abs(uy) > 0.75 ? 1 : 0.92);
+        car.vel.z += ux < -0.3 ? K.DODGE_BACK_UP_IMPULSE : K.DODGE_UP_IMPULSE;
         addScaled(car.vel, tmp, impulse);
         events.push({ type: "flip", carId: car.id });
       } else {
@@ -341,8 +387,11 @@ export function stepCar(car: Car, dt: number, events: SimEvent[]): void {
 
   handleJump(car, inp, dt, events);
 
-  // a gravidade age sempre; no chão a suspensão a compensa
-  car.vel.z -= K.GRAVITY * dt;
+  // A gravidade age sempre; no chão a suspensão compensa. Durante o
+  // dodge/flip ela é reduzida por alguns frames para o impulso direcional
+  // aparecer de verdade em front/back/side flips.
+  const gravityScale = car.dodgeTimer > 0 ? K.DODGE_GRAVITY_SCALE : 1;
+  car.vel.z -= K.GRAVITY * gravityScale * dt;
 
   if (car.onGround) {
     applySuspension(car, minDist, dt);
@@ -452,6 +501,8 @@ export function makeCar(id: number, team: 0 | 1, isBot: boolean): Car {
     onGround: true,
     groundNormal: v3(0, 0, 1),
     airTime: 0,
+    wheelCompression: [0, 0, 0, 0],
+    wheelContact: [false, false, false, false],
     jumpHeld: false,
     jumpTimer: 0,
     hasJump: true,

@@ -47,6 +47,12 @@ export const WHEEL_Y = 29.5;
 export const WHEEL_Z = -2; // centro da roda no espaço local
 export const REST_HEIGHT = 17; // altura do centro de massa em repouso
 export const SUSPENSION_TRAVEL = 18;
+// Resposta da suspensão por roda. O modelo continua barato (sem solver rígido),
+// mas cada roda agora contribui com mola, amortecimento e torque no chassi.
+export const SUSPENSION_STIFFNESS = 22; // converte compressão em velocidade alvo
+export const SUSPENSION_DAMPING = 0.82;
+export const SUSPENSION_MAX_PUSH = 5200; // uu/s² equivalente por roda
+export const SUSPENSION_TORQUE_RESPONSE = 0.0016;
 
 export const CAR_MAX_SPEED = 2300;
 export const DRIVE_MAX_SPEED = 1410; // sem boost
@@ -89,7 +95,10 @@ export const JUMP_IMPULSE = 291.667;
 export const JUMP_HOLD_ACCEL = 1400;
 export const JUMP_HOLD_TIME = 0.2;
 export const FLIP_WINDOW = 1.25; // tempo para usar o segundo pulo
-export const DODGE_IMPULSE = 500;
+export const DODGE_IMPULSE = 620;
+export const DODGE_UP_IMPULSE = 82; // lift curto para o flip não ser "engolido" pela gravidade
+export const DODGE_BACK_UP_IMPULSE = 120;
+export const DODGE_GRAVITY_SCALE = 0.42; // gravidade reduzida enquanto o dodge está ativo
 export const DODGE_TIME = 0.65;
 export const DODGE_TORQUE = 9.0; // rad/s durante o flip (~1 volta em 0.65s)
 

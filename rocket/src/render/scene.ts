@@ -128,7 +128,7 @@ export class Renderer {
   syncCars(world: World): void {
     while (this.cars.length < world.cars.length) {
       const idx = this.cars.length;
-      this.cars.push(buildCar(this.scene, world.cars[idx].team));
+      this.cars.push(buildCar(this.scene, world.cars[idx].team, world.cars[idx].id));
       const sh = new THREE.Mesh(
         new THREE.CircleGeometry(K.HITBOX_L * 0.5, 10),
         new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.28 }),
@@ -247,10 +247,18 @@ export class Renderer {
       const cs = Math.max(0.3, 1 - car.pos.z / 1800);
       this.carShadows[i].scale.setScalar(cs);
 
-      // rodas girando
+      // rodas: eixo correto no Y, giro visual, esterço dianteiro e curso da mola.
       const speed = Math.hypot(car.vel.x, car.vel.y, car.vel.z);
       const spin = (speed / K.WHEEL_RADIUS) * dt * (car.onGround ? 1 : 0.25);
-      for (const wm of vis.wheels) wm.rotation.y += spin;
+      const steerVis = car.onGround ? -car.input.steer * 0.42 : 0;
+      for (let wi = 0; wi < vis.wheels.length; wi++) {
+        const wm = vis.wheels[wi];
+        wm.rotation.y += spin;
+        wm.rotation.z = wi < 2 ? steerVis : 0;
+        const compression = car.wheelCompression[wi] ?? 0;
+        const droop = car.wheelContact[wi] ? 0 : -K.SUSPENSION_TRAVEL * 0.22;
+        wm.position.z = K.WHEEL_Z + compression * K.SUSPENSION_TRAVEL * 0.45 + droop;
+      }
 
       if (quality.trails && car.supersonic) {
         vis.trailPos[vis.trailIdx * 3] = car.pos.x;

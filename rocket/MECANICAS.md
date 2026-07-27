@@ -167,8 +167,10 @@ Ao sair da superfície, a sticky force some após alguns ticks.
 Depois do primeiro pulo você tem uma janela de **1.25 s** e um "flip" guardado:
 
 - **Sem input direcional** → *double jump*: outro impulso de 291.67 pra cima.
-- **Com input direcional** → *dodge/flip*: impulso horizontal de ~500 uu/s na
-  direção do input + rotação forçada de ~1 volta em 0.65 s.
+- **Com input direcional** → *dodge/flip*: impulso horizontal de ~620 uu/s na
+  direção do input + pequeno lift vertical + rotação forçada de ~1 volta em 0.65 s.
+  Durante o dodge a gravidade fica suavizada por alguns frames para front/back/side
+  flips terem deslocamento perceptível em vez de parecerem só uma rotação.
   - **Front flip**: ganha velocidade — é o método padrão de se locomover.
   - **Back flip**: freia e ganha altura.
   - **Diagonal (45°)**: o famoso *speed flip / diagonal flip*.
