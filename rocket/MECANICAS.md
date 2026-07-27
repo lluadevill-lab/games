@@ -17,6 +17,28 @@ rígidos (Psyonix usa uma Bullet Physics modificada) onde:
   os carros (caixa orientada = OBB, com 4 rodas com suspensão).
 - Unidade de medida: **uu** (Unreal Unit). 1 uu ≈ 1,9 cm. Gravidade = **650 uu/s²**.
 
+### Convenção de eixos (leia antes de mexer na física)
+
+Sistema **destro**, com **X = frente**, **Z = cima**. A consequência que pega
+todo mundo:
+
+```
+Y = Z × X   =>   +Y aponta para a ESQUERDA
+```
+
+Ou seja, **a direita do carro é −Y**. E, pela regra da mão direita, uma rotação
+**positiva em torno de "cima" gira para a ESQUERDA**. Por isso, no código:
+
+| Entrada | Valor +1 significa | Sinal aplicado |
+|---|---|---|
+| `steer` | virar à direita | `-` (rotação em torno da normal) |
+| `yaw` | nariz à direita | `-` (rotação em torno de "cima") |
+| `pitch` | nariz para cima | `+` (rotação em torno de "direita") |
+| `roll` | rolar à direita | `+` (rotação em torno de "frente") |
+
+Os testes em `tests/controls.test.mjs` fixam cada uma dessas convenções — se
+alguma inverter, eles quebram na hora.
+
 Tudo o que parece "habilidade" (aéreo, flip reset, air dribble) é consequência
 emergente de umas 15 regras. Nenhuma delas é uma mecânica scriptada.
 

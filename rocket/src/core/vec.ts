@@ -147,10 +147,25 @@ export const qCopy = (a: Quat, b: Quat): Quat => {
   return a;
 };
 
-/** Eixos locais do corpo no espaço do mundo. */
+/**
+ * Eixos locais do corpo no espaço do mundo.
+ *
+ * ATENÇÃO À CONVENÇÃO — é fonte clássica de bug de direção invertida.
+ * O sistema é DESTRO com X = frente e Z = cima. Logo:
+ *
+ *     Y = Z × X  =>  +Y aponta para a ESQUERDA
+ *
+ * Portanto a direita do carro é -Y. `rightOf` já devolve a direita
+ * verdadeira; use `leftOf` quando precisar de +Y explicitamente.
+ */
 const _ex: V3 = v3(1, 0, 0);
-const _ey: V3 = v3(0, 1, 0);
+const _eyLeft: V3 = v3(0, 1, 0);
+const _eyRight: V3 = v3(0, -1, 0);
 const _ez: V3 = v3(0, 0, 1);
+
 export const forwardOf = (out: V3, q: Quat): V3 => qRotate(out, q, _ex);
-export const rightOf = (out: V3, q: Quat): V3 => qRotate(out, q, _ey);
+/** Direita do carro no mundo (-Y local). */
+export const rightOf = (out: V3, q: Quat): V3 => qRotate(out, q, _eyRight);
+/** Esquerda do carro no mundo (+Y local). */
+export const leftOf = (out: V3, q: Quat): V3 => qRotate(out, q, _eyLeft);
 export const upOf = (out: V3, q: Quat): V3 => qRotate(out, q, _ez);

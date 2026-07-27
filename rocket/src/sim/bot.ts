@@ -116,9 +116,13 @@ function aimOrientation(
 
   // Ganhos proporcionais à autoridade real de cada eixo
   // (roll 38.34 > pitch 12.46 > yaw 9.11 rad/s²).
+  //
+  // Sinal do yaw: a entrada yaw = +1 gira para a DIREITA, o que corresponde
+  // a uma rotação NEGATIVA em torno do eixo "cima" (regra da mão direita).
+  // Por isso o erro e o amortecimento entram invertidos neste eixo.
   inp.roll = clamp(eRoll * 5.5 - wRoll * 0.42, -1, 1);
   inp.pitch = clamp(ePitch * 4.0 - wPitch * 0.58, -1, 1);
-  inp.yaw = clamp(eYaw * 3.2 - wYaw * 0.62, -1, 1);
+  inp.yaw = clamp(-eYaw * 3.2 + wYaw * 0.62, -1, 1);
 
   const yawErr = Math.atan2(dot(_dFwd, right), dot(_dFwd, fwd));
   const pitchErr = Math.asin(clamp(dot(_dFwd, up), -1, 1));

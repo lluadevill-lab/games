@@ -162,10 +162,13 @@ function groundDrive(car: Car, inp: CarInput, dt: number): void {
   }
 
   // ---- esterço: taxa de guinada = curvatura(v) * v
+  // Sinal: a rotação é em torno da normal (que aponta para CIMA) e, num
+  // sistema destro, giro positivo é anti-horário = para a ESQUERDA.
+  // Como steer = +1 significa direita, entra o sinal negativo.
   const steer = clamp(inp.steer, -1, 1);
   if (Math.abs(steer) > 0.01) {
     const curvature = curveLookup(K.STEER_CURVE, Math.min(speed, 2300));
-    let yawRate = curvature * Math.max(speed, 10) * steer * sign1(vFwd || 1);
+    let yawRate = -curvature * Math.max(speed, 10) * steer * sign1(vFwd || 1);
     if (inp.handbrake) yawRate *= 1.6; // powerslide gira mais o nariz
     addScaled(car.ang, n, yawRate - dot(car.ang, n));
   } else {
@@ -201,9 +204,13 @@ function airControl(car: Car, inp: CarInput, dt: number): void {
     yawIn = 0;
   }
 
+  // Sinais das rotações (regra da mão direita nos eixos do carro):
+  //  - roll  em torno de "frente": positivo já inclina para a direita  -> +
+  //  - pitch em torno de "direita": positivo já levanta o nariz        -> +
+  //  - yaw   em torno de "cima": positivo gira para a ESQUERDA         -> -
   const tRoll = K.AIR_ROLL * rollIn - (rollIn === 0 ? K.DAMP_ROLL * wx : 0);
   const tPitch = K.AIR_PITCH * pitchIn - (pitchIn === 0 ? K.DAMP_PITCH * wy : 0);
-  const tYaw = K.AIR_YAW * yawIn - (yawIn === 0 ? K.DAMP_YAW * wz : 0);
+  const tYaw = -K.AIR_YAW * yawIn - (yawIn === 0 ? K.DAMP_YAW * wz : 0);
 
   addScaled(car.ang, fwd, tRoll * dt);
   addScaled(car.ang, right, tPitch * dt);
@@ -228,10 +235,12 @@ function handleJump(car: Car, inp: CarInput, dt: number, events: SimEvent[]): vo
     if (!car.dodgeCancelled) {
       forwardOf(fwd, car.rot);
       rightOf(right, car.rot);
-      // eixo perpendicular à direção do flip
+      // Eixo perpendicular à direção do flip (regra da mão direita):
+      //  - flip para FRENTE (dir.x=+1) => nariz mergulha => giro em -direita
+      //  - flip para a DIREITA (dir.y=+1) => rola à direita => giro em +frente
       set(tmp, 0, 0, 0);
-      addScaled(tmp, fwd, -car.dodgeDir.y);
-      addScaled(tmp, right, car.dodgeDir.x);
+      addScaled(tmp, fwd, car.dodgeDir.y);
+      addScaled(tmp, right, -car.dodgeDir.x);
       normalize(tmp);
       scale(tmp, K.DODGE_TORQUE);
       copy(car.ang, tmp);
