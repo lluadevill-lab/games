@@ -39,6 +39,10 @@ export interface Car {
   groundNormal: V3;
   airTime: number;
 
+  // telemetria/estado de suspensão por roda (ordem: frente esq, frente dir, traseira esq, traseira dir)
+  wheelCompression: [number, number, number, number];
+  wheelContact: [boolean, boolean, boolean, boolean];
+
   // pulo / flip
   jumpHeld: boolean;
   jumpTimer: number; // tempo segurando o primeiro pulo
