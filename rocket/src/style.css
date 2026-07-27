@@ -399,75 +399,338 @@ canvas {
 .touch.on {
   display: block;
 }
+.touch.editing {
+  display: block;
+  z-index: 40;
+}
 
-.stick {
+.titem {
   position: absolute;
-  left: max(22px, env(safe-area-inset-left));
-  bottom: max(26px, env(safe-area-inset-bottom));
-  width: 132px;
-  height: 132px;
-  border-radius: 50%;
-  border: 2px solid rgba(140, 180, 230, 0.25);
-  background: rgba(10, 16, 26, 0.4);
   pointer-events: auto;
-}
-.knob {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 56px;
-  height: 56px;
-  margin: -28px 0 0 -28px;
+  display: grid;
+  place-items: center;
   border-radius: 50%;
-  background: rgba(120, 170, 235, 0.4);
-  border: 2px solid rgba(180, 210, 250, 0.5);
-}
-
-.tbuttons {
-  position: absolute;
-  right: max(16px, env(safe-area-inset-right));
-  bottom: max(140px, calc(env(safe-area-inset-bottom) + 140px));
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  align-items: flex-end;
-}
-.tthrottle {
-  position: absolute;
-  right: max(16px, env(safe-area-inset-right));
-  bottom: max(22px, env(safe-area-inset-bottom));
-  display: flex;
-  gap: 10px;
-}
-
-.tbtn {
-  pointer-events: auto;
-  border-radius: 50%;
-  width: 74px;
-  height: 74px;
   border: 2px solid rgba(140, 180, 230, 0.28);
-  background: rgba(14, 22, 36, 0.55);
+  background: rgba(14, 22, 36, 0.5);
   color: #cfe0f5;
   font-family: inherit;
   font-weight: 800;
-  font-size: 12px;
   letter-spacing: 1px;
+  text-align: center;
+  user-select: none;
+  transition: background 0.08s, transform 0.08s;
 }
-.tbtn.small {
-  width: 58px;
-  height: 58px;
-  font-size: 18px;
+.titem.down {
+  background: rgba(90, 140, 210, 0.5);
+  transform: scale(0.94);
 }
-.tbtn.jump {
+
+.titem-jump {
   border-color: rgba(120, 220, 160, 0.5);
+  color: #b6f2d0;
 }
-.tbtn.boost {
+.titem-boost {
   border-color: rgba(255, 200, 74, 0.55);
   color: #ffdf9a;
 }
-.tbtn.acc {
+.titem-throttle {
   border-color: rgba(120, 190, 255, 0.5);
 }
-.tbtn.down {
-  background: rgba(90, 140, 210, 0.45);
+.titem-stick {
+  border: none;
+  background: none;
+}
+
+.stick-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid rgba(140, 180, 230, 0.25);
+  background: rgba(10, 16, 26, 0.38);
+}
+.knob {
+  position: absolute;
+  width: 42%;
+  height: 42%;
+  border-radius: 50%;
+  background: rgba(120, 170, 235, 0.42);
+  border: 2px solid rgba(180, 210, 250, 0.5);
+  pointer-events: none;
+}
+.dpad {
+  position: absolute;
+  inset: 0;
+  display: none;
+  pointer-events: none;
+  color: rgba(180, 210, 250, 0.5);
+  font-size: 13px;
+}
+.touch.dpad-mode .dpad {
+  display: block;
+}
+.touch.dpad-mode .stick-ring {
+  border-radius: 18%;
+}
+.dp {
+  position: absolute;
+}
+.dp.up { top: 5%; left: 50%; transform: translateX(-50%); }
+.dp.down { bottom: 5%; left: 50%; transform: translateX(-50%); }
+.dp.left { left: 5%; top: 50%; transform: translateY(-50%); }
+.dp.right { right: 5%; top: 50%; transform: translateY(-50%); }
+
+/* modo de edição do layout */
+.touch.editing .titem {
+  cursor: grab;
+  border-style: dashed;
+  border-color: rgba(255, 200, 74, 0.8);
+  background: rgba(255, 200, 74, 0.12);
+}
+.touch.editing .titem.dragging {
+  cursor: grabbing;
+  border-color: #ffc84a;
+  background: rgba(255, 200, 74, 0.3);
+  transform: scale(1.06);
+}
+.touch.editing .titem.hidden-item {
+  opacity: 0.35;
+}
+
+.edit-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 35;
+  pointer-events: none;
+  background: rgba(4, 8, 16, 0.55);
+}
+.edit-overlay.hidden {
+  display: none;
+}
+.edit-bar {
+  position: absolute;
+  top: max(16px, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--panel);
+  border: 1px solid var(--stroke);
+  pointer-events: auto;
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.menu.settings.editing-layout .menu-card {
+  display: none;
+}
+
+/* ------------------------------------------------------------ settings */
+.menu-card.wide {
+  width: min(680px, 100%);
+}
+
+.tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--stroke);
+  padding-bottom: 10px;
+  flex-wrap: wrap;
+}
+.tab {
+  flex: 1;
+  min-width: 92px;
+  padding: 9px 6px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.tab.on {
+  background: linear-gradient(180deg, #3d8bff, #2a63c4);
+  color: #fff;
+}
+
+.tabpane {
+  display: none;
+  max-height: min(52vh, 460px);
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.tabpane.on {
+  display: block;
+}
+
+.hint {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin: 0 0 12px;
+  line-height: 1.5;
+}
+.hint.ok {
+  color: #7ddba0;
+}
+
+.keylist h4 {
+  margin: 14px 0 7px;
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: var(--orange);
+  text-transform: uppercase;
+}
+.keylist h4:first-child {
+  margin-top: 0;
+}
+
+.keyrow,
+.trow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+}
+.kname {
+  flex: 1;
+  font-size: 13.5px;
+  color: var(--text);
+}
+.kbind {
+  min-width: 96px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.kbind.alt {
+  min-width: 58px;
+  opacity: 0.6;
+}
+.kbind:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.kbind.capturing {
+  border-color: #ffc84a;
+  background: rgba(255, 200, 74, 0.18);
+  color: #ffc84a;
+}
+.kbind.pad {
+  min-width: 150px;
+}
+
+.trow input[type="range"] {
+  flex: 1.4;
+}
+.vis {
+  min-width: 74px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--stroke);
+  background: transparent;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.vis.on {
+  color: #7ddba0;
+  border-color: rgba(125, 219, 160, 0.4);
+}
+
+.srow {
+  margin-bottom: 16px;
+}
+.shead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 5px;
+}
+.sval {
+  color: var(--orange);
+  font-size: 15px;
+}
+.srow small {
+  display: block;
+  margin-top: 3px;
+  font-size: 11.5px;
+  color: rgba(140, 170, 210, 0.6);
+}
+
+input[type="range"] {
+  width: 100%;
+  height: 5px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(140, 170, 210, 0.22);
+  border-radius: 4px;
+  outline: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  background: #3d8bff;
+  cursor: pointer;
+  border: 2px solid #0b1220;
+}
+input[type="range"]::-moz-range-thumb {
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  background: #3d8bff;
+  cursor: pointer;
+  border: 2px solid #0b1220;
+}
+
+.btnrow {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--stroke);
+}
+.btnrow .ghost,
+.btnrow .play {
+  margin-top: 0;
+}
+.btnrow .play {
+  flex: 1.3;
+}
+.ghost.danger:hover {
+  color: #ff8080;
+  border-color: rgba(255, 128, 128, 0.4);
+}
+.play.small {
+  width: auto;
+  padding: 8px 18px;
+  font-size: 13px;
+  margin: 0;
+}
+
+@media (max-width: 520px) {
+  .kbind {
+    min-width: 78px;
+    font-size: 11.5px;
+  }
+  .kname {
+    font-size: 12.5px;
+  }
+  .tabpane {
+    max-height: 46vh;
+  }
 }

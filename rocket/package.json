@@ -8,7 +8,7 @@
     "build": "tsc -b --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
-    "test": "tsx tests/physics.test.mjs && tsx tests/controls.test.mjs",
+    "test": "tsx tests/physics.test.mjs && tsx tests/controls.test.mjs && tsx tests/arena.test.mjs && tsx tests/settings.test.mjs",
     "test:boot": "npm run build && node tests/boot.test.mjs",
     "test:all": "npm run typecheck && npm run test && npm run test:boot"
   },

@@ -20,6 +20,7 @@ export const defaultConfig: GameConfig = {
 export function buildMenu(
   parent: HTMLElement,
   onStart: (cfg: GameConfig) => void,
+  onOpenControls: () => void,
 ): { show: () => void; hide: () => void; el: HTMLElement } {
   const cfg: GameConfig = { ...defaultConfig };
   const el = document.createElement("div");
@@ -73,6 +74,7 @@ export function buildMenu(
       </div>
 
       <button class="play" id="play">JOGAR</button>
+      <button class="ghost" id="open-controls">⚙ Controles &amp; sensibilidade</button>
 
       <details class="help">
         <summary>Controles &amp; manobras</summary>
@@ -85,7 +87,9 @@ export function buildMenu(
               <li><b>Espaço</b> pular · 2º toque = flip/double jump</li>
               <li><b>Shift</b> boost</li>
               <li><b>K</b> powerslide · no ar: air roll</li>
+              <li><b>Q / E</b> air roll esquerda / direita</li>
               <li><b>C</b> ball cam · <b>R</b> reiniciar · <b>P</b> pausa</li>
+              <li>Tudo remapeável em <b>⚙ Controles</b></li>
             </ul>
           </div>
           <div>
@@ -122,6 +126,10 @@ export function buildMenu(
   (el.querySelector("#play") as HTMLElement).addEventListener("click", () => {
     onStart({ ...cfg });
   });
+  (el.querySelector("#open-controls") as HTMLElement).addEventListener(
+    "click",
+    onOpenControls,
+  );
 
   return {
     el,
@@ -132,7 +140,13 @@ export function buildMenu(
 
 export function buildPause(
   parent: HTMLElement,
-  handlers: { resume: () => void; restart: () => void; menu: () => void; toggleMute: () => void },
+  handlers: {
+    resume: () => void;
+    restart: () => void;
+    menu: () => void;
+    toggleMute: () => void;
+    controls: () => void;
+  },
 ): { show: () => void; hide: () => void; visible: () => boolean } {
   const el = document.createElement("div");
   el.className = "menu pause hidden";
@@ -141,6 +155,7 @@ export function buildPause(
       <h2>PAUSA</h2>
       <button class="play" id="p-resume">Continuar</button>
       <button class="ghost" id="p-restart">Reiniciar partida</button>
+      <button class="ghost" id="p-controls">⚙ Controles</button>
       <button class="ghost" id="p-mute">Som ligado/desligado</button>
       <button class="ghost" id="p-menu">Menu principal</button>
     </div>
@@ -149,6 +164,7 @@ export function buildPause(
   (el.querySelector("#p-resume") as HTMLElement).onclick = handlers.resume;
   (el.querySelector("#p-restart") as HTMLElement).onclick = handlers.restart;
   (el.querySelector("#p-menu") as HTMLElement).onclick = handlers.menu;
+  (el.querySelector("#p-controls") as HTMLElement).onclick = handlers.controls;
   (el.querySelector("#p-mute") as HTMLElement).onclick = handlers.toggleMute;
   return {
     show: () => el.classList.remove("hidden"),

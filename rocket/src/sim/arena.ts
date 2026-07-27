@@ -1,17 +1,24 @@
 /**
  * Geometria da arena como campo de distância (SDF).
  *
- * A arena é uma caixa com cantos chanfrados a 45°, arredondamento entre
- * chão/teto e paredes, e duas bocas de gol. Representar tudo como SDF é o que
- * permite tratar chão, parede, teto e canto exatamente igual — que é
- * justamente o que dá o "dirigir na parede" do jogo original.
+ * A arena do Rocket League não é uma caixa: os quatro cantos são CURVAS
+ * amplas no plano XY, e a junção entre o piso/teto e as paredes também é
+ * arredondada. É isso que permite entrar no canto em velocidade e sair
+ * dirigindo pela parede sem uma quina que mate o momento.
+ *
+ * Representar tudo como um campo de distância (SDF) faz chão, parede, teto e
+ * canto serem exatamente a mesma coisa para o motor — que é justamente o que
+ * dá o "dirigir em qualquer superfície" do original.
+ *
+ * A silhueta em XY é um retângulo de cantos arredondados (raio CORNER_RADIUS),
+ * e o perfil vertical arredonda contra piso e teto com raio WALL_FILLET.
  */
 import { V3, v3, set, normalize } from "../core/vec";
 import {
   FIELD_X,
   FIELD_Y,
   CEILING_Z,
-  CORNER_D,
+  CORNER_RADIUS,
   GOAL_HALF_W,
   GOAL_H,
   GOAL_DEPTH,
@@ -23,22 +30,52 @@ export interface Contact {
   n: V3; // normal apontando para dentro do campo
 }
 
-const SQ = Math.SQRT1_2;
-
 // buffers reaproveitados (sem alocação no hot path)
 const _n = v3();
-let _bestD = 0;
-let _bnx = 0,
-  _bny = 0,
-  _bnz = 0;
 
-function consider(d: number, nx: number, ny: number, nz: number): void {
-  if (d < _bestD) {
-    _bestD = d;
-    _bnx = nx;
-    _bny = ny;
-    _bnz = nz;
+/**
+ * Distância horizontal até a parede e a normal dessa parede (no plano XY).
+ *
+ * O contorno é um retângulo de cantos arredondados. Fora da região dos
+ * cantos a distância é a da parede reta; dentro dela, a distância até o
+ * arco de raio CORNER_RADIUS.
+ *
+ * Retorna a distância; escreve a normal (apontando para dentro) em nx/ny.
+ */
+let _wnx = 0;
+let _wny = 0;
+
+function wallDistanceXY(x: number, y: number): number {
+  const ax = Math.abs(x);
+  const ay = Math.abs(y);
+  const sx = x >= 0 ? 1 : -1;
+  const sy = y >= 0 ? 1 : -1;
+
+  // centro do arco do canto
+  const cx = FIELD_X - CORNER_RADIUS;
+  const cy = FIELD_Y - CORNER_RADIUS;
+
+  if (ax > cx && ay > cy) {
+    // ---- região do canto: distância ao arco
+    const dx = ax - cx;
+    const dy = ay - cy;
+    const r = Math.hypot(dx, dy) || 1e-6;
+    _wnx = (-sx * dx) / r;
+    _wny = (-sy * dy) / r;
+    return CORNER_RADIUS - r;
   }
+
+  // ---- paredes retas: a mais próxima entre a lateral (X) e o fundo (Y)
+  const dX = FIELD_X - ax;
+  const dY = FIELD_Y - ay;
+  if (dX < dY) {
+    _wnx = -sx;
+    _wny = 0;
+    return dX;
+  }
+  _wnx = 0;
+  _wny = -sy;
+  return dY;
 }
 
 /**
@@ -47,77 +84,101 @@ function consider(d: number, nx: number, ny: number, nz: number): void {
  */
 export function arenaDistance(x: number, y: number, z: number, out?: V3): number {
   const n = out ?? _n;
-  _bestD = Infinity;
-  _bnx = 0;
-  _bny = 0;
-  _bnz = 1;
-
   const ax = Math.abs(x);
   const ay = Math.abs(y);
-  const sx = x >= 0 ? 1 : -1;
   const sy = y >= 0 ? 1 : -1;
 
-  const insideMouth = ax < GOAL_HALF_W && z < GOAL_H && ay > FIELD_Y - WALL_FILLET;
+  // ---------------------------------------------------------- baliza
+  // Dentro da boca do gol o volume é uma caixa simples que avança GOAL_DEPTH.
+  const inMouthXZ = ax < GOAL_HALF_W && z < GOAL_H;
+  if (inMouthXZ && ay > FIELD_Y - 1) {
+    let best = GOAL_HALF_W - ax;
+    let bx = x >= 0 ? -1 : 1;
+    let by = 0;
+    let bz = 0;
 
-  // ---- paredes candidatas: [distância, normal]
-  const wallX = FIELD_X - ax;
-  const wallDiag = (CORNER_D - (ax + ay)) * SQ;
-  const wallY = (insideMouth ? FIELD_Y + GOAL_DEPTH : FIELD_Y) - ay;
-
-  // ---- chão e teto (com arredondamento contra a parede mais próxima)
-  // parede lateral mais próxima entre X e diagonal
-  let dw = wallX,
-    wnx = -sx,
-    wny = 0;
-  if (wallDiag < dw) {
-    dw = wallDiag;
-    wnx = -sx * SQ;
-    wny = -sy * SQ;
-  }
-  if (!insideMouth && wallY < dw) {
-    dw = wallY;
-    wnx = 0;
-    wny = -sy;
-  }
-
-  // chão: se perto de uma parede, a superfície vira um quarto de cilindro
-  if (dw < WALL_FILLET && z < WALL_FILLET) {
-    const cx = WALL_FILLET - dw;
-    const cz = WALL_FILLET - z;
-    const r = Math.hypot(cx, cz) || 1e-6;
-    consider(WALL_FILLET - r, (wnx * cx) / r, (wny * cx) / r, cz / r);
-  } else {
-    consider(z, 0, 0, 1);
-  }
-
-  // teto: idem
-  const zt = CEILING_Z - z;
-  if (dw < WALL_FILLET && zt < WALL_FILLET) {
-    const cx = WALL_FILLET - dw;
-    const cz = WALL_FILLET - zt;
-    const r = Math.hypot(cx, cz) || 1e-6;
-    consider(WALL_FILLET - r, (wnx * cx) / r, (wny * cx) / r, -cz / r);
-  } else {
-    consider(zt, 0, 0, -1);
+    const dBack = FIELD_Y + GOAL_DEPTH - ay;
+    if (dBack < best) {
+      best = dBack;
+      bx = 0;
+      by = -sy;
+      bz = 0;
+    }
+    if (z < best) {
+      best = z;
+      bx = 0;
+      by = 0;
+      bz = 1;
+    }
+    const dTop = GOAL_H - z;
+    if (dTop < best) {
+      best = dTop;
+      bx = 0;
+      by = 0;
+      bz = -1;
+    }
+    set(n, bx, by, bz);
+    return best;
   }
 
-  // paredes planas (fora da faixa de fillet elas já dominam sozinhas)
-  consider(wallX, -sx, 0, 0);
-  consider(wallDiag, -sx * SQ, -sy * SQ, 0);
-  consider(wallY, 0, -sy, 0);
+  // ---------------------------------------------------------- campo
+  const dWall = wallDistanceXY(x, y);
+  const wnx = _wnx;
+  const wny = _wny;
 
-  // interior do gol: laterais e travessão
-  if (insideMouth) {
-    consider(GOAL_HALF_W - ax, -sx, 0, 0);
-    if (ay > FIELD_Y) consider(GOAL_H - z, 0, 0, -1);
-  } else if (ay > FIELD_Y - WALL_FILLET) {
-    // postes e travessão vistos de fora (caixa sólida ao redor da boca)
-    // trata o contorno da boca como parede normal — já coberto por wallY
+  // Perto da boca do gol a parede do fundo "abre": não deve haver superfície
+  // ali, senão a bola bate numa parede invisível na entrada da baliza.
+  const nearMouth = inMouthXZ && ay > FIELD_Y - WALL_FILLET;
+
+  const dFloor = z;
+  const dCeil = CEILING_Z - z;
+
+  // ---- arredondamento entre parede e piso/teto (quarto de toro)
+  // Dentro da faixa de fillet a superfície é um arco no plano (parede, altura).
+  if (!nearMouth && dWall < WALL_FILLET) {
+    if (dFloor < WALL_FILLET) {
+      const a = WALL_FILLET - dWall;
+      const b = WALL_FILLET - dFloor;
+      const r = Math.hypot(a, b) || 1e-6;
+      if (r > 1e-6) {
+        set(n, (wnx * a) / r, (wny * a) / r, b / r);
+        normalize(n);
+        return WALL_FILLET - r;
+      }
+    }
+    if (dCeil < WALL_FILLET) {
+      const a = WALL_FILLET - dWall;
+      const b = WALL_FILLET - dCeil;
+      const r = Math.hypot(a, b) || 1e-6;
+      if (r > 1e-6) {
+        set(n, (wnx * a) / r, (wny * a) / r, -b / r);
+        normalize(n);
+        return WALL_FILLET - r;
+      }
+    }
   }
 
-  set(n, _bnx, _bny, _bnz);
-  normalize(n);
-  return _bestD;
+  // ---- superfície mais próxima entre piso, teto e parede
+  let best = dFloor;
+  let bx = 0;
+  let by = 0;
+  let bz = 1;
+
+  if (dCeil < best) {
+    best = dCeil;
+    bx = 0;
+    by = 0;
+    bz = -1;
+  }
+  if (!nearMouth && dWall < best) {
+    best = dWall;
+    bx = wnx;
+    by = wny;
+    bz = 0;
+  }
+
+  set(n, bx, by, bz);
+  return best;
 }
 
 /** Colisão de uma esfera de raio `radius` centrada em `p`. */
@@ -138,4 +199,29 @@ export function ballInGoal(p: V3, radius: number): 0 | 1 | -1 {
   if (p.y > FIELD_Y + radius) return 1;
   if (p.y < -FIELD_Y - radius) return -1;
   return 0;
+}
+
+/**
+ * Contorno do campo em XY (para o renderer desenhar o mesmo formato que a
+ * física usa). `segsPerCorner` controla quantos segmentos aproximam cada arco.
+ */
+export function fieldOutline(segsPerCorner = 12): [number, number][] {
+  const pts: [number, number][] = [];
+  const cx = FIELD_X - CORNER_RADIUS;
+  const cy = FIELD_Y - CORNER_RADIUS;
+  // quatro cantos, sentido anti-horário a partir de (+X, +Y)
+  const corners: [number, number, number][] = [
+    [cx, cy, 0], // +X +Y  -> ângulos 0..90
+    [-cx, cy, 90],
+    [-cx, -cy, 180],
+    [cx, -cy, 270],
+  ];
+  for (const [ox, oy, a0] of corners) {
+    for (let i = 0; i <= segsPerCorner; i++) {
+      const a = ((a0 + (i / segsPerCorner) * 90) * Math.PI) / 180;
+      pts.push([ox + Math.cos(a) * CORNER_RADIUS, oy + Math.sin(a) * CORNER_RADIUS]);
+    }
+  }
+  pts.push(pts[0]);
+  return pts;
 }

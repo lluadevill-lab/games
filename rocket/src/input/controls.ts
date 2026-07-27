@@ -1,89 +1,156 @@
 /**
  * Entradas: teclado, gamepad e touch. Todos produzem o mesmo CarInput —
  * exatamente como no jogo original, onde o "skill" está nos mesmos 8 canais.
+ *
+ * As teclas, botões e a sensibilidade vêm de ControlSettings (customizável).
  */
-import { deadzone, clamp } from "../core/mathx";
+import { clamp } from "../core/mathx";
 import type { CarInput } from "../sim/types";
+import {
+  type ActionId,
+  type ControlSettings,
+  defaultSettings,
+} from "./settings";
 
-export type Binding = keyof typeof DEFAULT_KEYS;
+/** Zona morta radial + curva de resposta. */
+export function shapeAxis(v: number, dz: number, gamma: number): number {
+  const a = Math.abs(v);
+  if (a <= dz) return 0;
+  const t = (a - dz) / (1 - dz || 1);
+  const shaped = gamma === 1 ? t : Math.pow(t, gamma);
+  return (v < 0 ? -1 : 1) * clamp(shaped, 0, 1);
+}
 
-export const DEFAULT_KEYS = {
-  throttle: ["KeyW", "ArrowUp"],
-  reverse: ["KeyS", "ArrowDown"],
-  left: ["KeyA", "ArrowLeft"],
-  right: ["KeyD", "ArrowRight"],
-  jump: ["Space"],
-  boost: ["ShiftLeft", "ShiftRight", "KeyL"],
-  handbrake: ["KeyK", "AltLeft"],
-  pitchUp: ["KeyI"],
-  pitchDown: ["KeyO"],
-  ballcam: ["KeyC"],
-  reset: ["KeyR"],
-};
+export interface TouchState {
+  active: boolean;
+  steer: number;
+  pitch: number;
+  throttle: number;
+  jump: boolean;
+  boost: boolean;
+  handbrake: boolean;
+  /** disparo único de ball cam pelo botão touch */
+  ballcamTap: boolean;
+}
 
 export class Controls {
   private keys = new Set<string>();
   private pressedOnce = new Set<string>();
+  private padPrev = new Map<number, boolean>();
+  private padTapped = new Set<number>();
+
+  settings: ControlSettings = defaultSettings();
   gamepadIndex: number | null = null;
-  touch = {
+  lastGamepadName = "";
+
+  touch: TouchState = {
     active: false,
     steer: 0,
-    throttle: 0,
     pitch: 0,
+    throttle: 0,
     jump: false,
     boost: false,
     handbrake: false,
+    ballcamTap: false,
   };
+
+  /** Quando true, o jogo está capturando uma tecla para remapear. */
+  capturing = false;
 
   constructor() {
     window.addEventListener("keydown", (e) => {
       if (e.repeat) return;
       this.keys.add(e.code);
       this.pressedOnce.add(e.code);
-      if (
-        [
-          "Space",
-          "ArrowUp",
-          "ArrowDown",
-          "ArrowLeft",
-          "ArrowRight",
-          "Tab",
-        ].includes(e.code)
-      )
-        e.preventDefault();
+      // não sequestrar teclas enquanto o usuário digita/remapeia
+      if (this.capturing) return;
+      if (this.isBound(e.code)) e.preventDefault();
     });
     window.addEventListener("keyup", (e) => this.keys.delete(e.code));
     window.addEventListener("blur", () => this.keys.clear());
     window.addEventListener("gamepadconnected", (e) => {
-      this.gamepadIndex = (e as GamepadEvent).gamepad.index;
+      const gp = (e as GamepadEvent).gamepad;
+      this.gamepadIndex = gp.index;
+      this.lastGamepadName = gp.id;
     });
     window.addEventListener("gamepaddisconnected", () => {
       this.gamepadIndex = null;
     });
   }
 
-  private any(codes: string[]): boolean {
-    return codes.some((c) => this.keys.has(c));
+  /** A tecla está associada a alguma ação do jogo? */
+  private isBound(code: string): boolean {
+    const k = this.settings.keys;
+    for (const id of Object.keys(k) as ActionId[]) {
+      if (k[id].includes(code)) return true;
+    }
+    return false;
   }
 
-  /** true apenas no frame em que a tecla foi pressionada. */
-  tapped(codes: string[]): boolean {
-    for (const c of codes) if (this.pressedOnce.has(c)) return true;
+  private held(action: ActionId): boolean {
+    const codes = this.settings.keys[action];
+    for (const c of codes) if (this.keys.has(c)) return true;
+    return false;
+  }
+
+  /** true apenas no frame em que a ação foi acionada. */
+  tapped(action: ActionId): boolean {
+    for (const c of this.settings.keys[action]) {
+      if (this.pressedOnce.has(c)) return true;
+    }
+    // botões de gamepad mapeados para ações de sistema
+    const padIdx = (this.settings.pad as Record<string, number>)[action];
+    if (padIdx !== undefined && this.padTapped.has(padIdx)) return true;
+    if (action === "ballcam" && this.touch.ballcamTap) return true;
     return false;
   }
 
   endFrame(): void {
     this.pressedOnce.clear();
+    this.padTapped.clear();
+    this.touch.ballcamTap = false;
   }
 
-  private gamepad(): Gamepad | null {
-    if (this.gamepadIndex === null) return null;
+  gamepad(): Gamepad | null {
     const pads = navigator.getGamepads?.() ?? [];
-    return pads[this.gamepadIndex] ?? null;
+    if (this.gamepadIndex !== null && pads[this.gamepadIndex]) {
+      return pads[this.gamepadIndex];
+    }
+    // fallback: primeiro gamepad conectado
+    for (const p of pads) {
+      if (p) {
+        this.gamepadIndex = p.index;
+        this.lastGamepadName = p.id;
+        return p;
+      }
+    }
+    return null;
+  }
+
+  hasGamepad(): boolean {
+    return this.gamepad() !== null;
+  }
+
+  /** Vibração (se suportada). */
+  rumble(strength: number, ms: number): void {
+    if (!this.settings.rumble) return;
+    const gp = this.gamepad() as (Gamepad & { vibrationActuator?: any }) | null;
+    const act = gp?.vibrationActuator;
+    if (!act?.playEffect) return;
+    try {
+      act.playEffect("dual-rumble", {
+        duration: ms,
+        strongMagnitude: clamp(strength, 0, 1),
+        weakMagnitude: clamp(strength * 0.6, 0, 1),
+      });
+    } catch {
+      /* alguns navegadores rejeitam; ignorar */
+    }
   }
 
   /** Preenche `out` com o estado atual das entradas. */
   poll(out: CarInput): CarInput {
+    const { sens } = this.settings;
     let throttle = 0;
     let steer = 0;
     let pitch = 0;
@@ -93,42 +160,62 @@ export class Controls {
     let boost = false;
     let handbrake = false;
 
-    // ---- teclado
-    if (this.any(DEFAULT_KEYS.throttle)) throttle += 1;
-    if (this.any(DEFAULT_KEYS.reverse)) throttle -= 1;
-    if (this.any(DEFAULT_KEYS.right)) steer += 1;
-    if (this.any(DEFAULT_KEYS.left)) steer -= 1;
-    if (this.any(DEFAULT_KEYS.jump)) jump = true;
-    if (this.any(DEFAULT_KEYS.boost)) boost = true;
-    if (this.any(DEFAULT_KEYS.handbrake)) handbrake = true;
-    // No ar, W/S viram pitch e A/D viram yaw (padrão do RL no teclado).
+    // ---------------------------------------------------------- teclado
+    if (this.held("throttle")) throttle += 1;
+    if (this.held("reverse")) throttle -= 1;
+    if (this.held("right")) steer += 1;
+    if (this.held("left")) steer -= 1;
+    if (this.held("jump")) jump = true;
+    if (this.held("boost")) boost = true;
+    if (this.held("handbrake")) handbrake = true;
+
+    // No ar, acelerar/ré viram pitch e virar vira guinada (padrão do RL).
     pitch = -throttle;
     yaw = steer;
-    if (this.any(DEFAULT_KEYS.pitchUp)) pitch = 1;
-    if (this.any(DEFAULT_KEYS.pitchDown)) pitch = -1;
-    roll = handbrake ? steer : 0;
+    if (this.held("pitchUp")) pitch = 1;
+    if (this.held("pitchDown")) pitch = -1;
+    // air roll dedicado (não precisa segurar powerslide)
+    if (this.held("rollRight")) roll += 1;
+    if (this.held("rollLeft")) roll -= 1;
+    // com powerslide segurado, virar rola o carro
+    if (handbrake && roll === 0) roll = steer;
 
-    // ---- gamepad (layout padrão do RL)
+    // ---------------------------------------------------------- gamepad
     const gp = this.gamepad();
     if (gp) {
-      const lx = deadzone(gp.axes[0] ?? 0);
-      const ly = deadzone(gp.axes[1] ?? 0);
+      const lx = shapeAxis(gp.axes[0] ?? 0, sens.deadzone, sens.gamma);
+      const ly = shapeAxis(gp.axes[1] ?? 0, sens.deadzone, sens.gamma);
       const rt = gp.buttons[7]?.value ?? 0;
       const lt = gp.buttons[6]?.value ?? 0;
-      if (Math.abs(lx) > 0) {
+
+      if (lx !== 0) {
         steer = lx;
         yaw = lx;
       }
-      if (Math.abs(ly) > 0) pitch = ly;
+      if (ly !== 0) pitch = ly;
+
       const t = rt - lt;
-      if (Math.abs(t) > 0.05) throttle = t;
-      if (gp.buttons[0]?.pressed) jump = true; // A
-      if (gp.buttons[1]?.pressed) boost = true; // B
-      if (gp.buttons[2]?.pressed) handbrake = true; // X
+      if (Math.abs(t) > 0.04) {
+        throttle = t;
+        // no ar o gatilho não deve mexer no nariz
+        if (ly === 0) pitch = 0;
+      }
+
+      const p = this.settings.pad;
+      if (gp.buttons[p.jump]?.pressed) jump = true;
+      if (gp.buttons[p.boost]?.pressed) boost = true;
+      if (gp.buttons[p.handbrake]?.pressed) handbrake = true;
       if (handbrake) roll = lx;
+
+      // detecta toques únicos (para ball cam, pausa, reset)
+      for (let i = 0; i < gp.buttons.length; i++) {
+        const now = gp.buttons[i].pressed;
+        if (now && !this.padPrev.get(i)) this.padTapped.add(i);
+        this.padPrev.set(i, now);
+      }
     }
 
-    // ---- touch
+    // ---------------------------------------------------------- touch
     if (this.touch.active) {
       if (this.touch.throttle !== 0) throttle = this.touch.throttle;
       if (this.touch.steer !== 0) {
@@ -142,11 +229,15 @@ export class Controls {
       if (handbrake) roll = steer;
     }
 
+    if (this.settings.invertPitch) pitch = -pitch;
+
+    // ---------------------------------------------------------- sensibilidade
+    // Multiplica e satura: manter no chão é preciso, no ar é mais solto.
     out.throttle = clamp(throttle, -1, 1);
-    out.steer = clamp(steer, -1, 1);
-    out.pitch = clamp(pitch, -1, 1);
-    out.yaw = clamp(handbrake ? 0 : yaw, -1, 1);
-    out.roll = clamp(roll, -1, 1);
+    out.steer = clamp(steer * sens.steer, -1, 1);
+    out.pitch = clamp(pitch * sens.air, -1, 1);
+    out.yaw = clamp((handbrake ? 0 : yaw) * sens.air, -1, 1);
+    out.roll = clamp(roll * sens.air, -1, 1);
     out.jump = jump;
     out.boost = boost;
     out.handbrake = handbrake;

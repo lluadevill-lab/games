@@ -537,7 +537,7 @@ section("Predição da bola");
 section("Bot");
 {
   resetBots();
-  const w = createWorld({ botCount: 1, matchTime: 60 });
+  const w = createWorld({ botCount: 1, matchTime: 60, seed: 4242 });
   const steps = Math.round(30 / K.TICK_DT);
   let botMoved = 0;
   let ballTouched = false;
@@ -642,6 +642,54 @@ section("Estabilidade");
 }
 
 // ==================================================================
+section("Determinismo");
+{
+  // A mesma semente tem de produzir exatamente a mesma partida. É o que
+  // permite replays e netcode — e o que torna estes testes confiáveis.
+  const play = (seed) => {
+    resetBots();
+    const w = createWorld({ botCount: 1, matchTime: 999, seed });
+    for (let i = 0; i < 120 * 20; i++) {
+      const inp = w.cars[0].input;
+      inp.throttle = Math.sin(i * 0.011);
+      inp.steer = Math.cos(i * 0.019);
+      inp.jump = i % 89 < 2;
+      inp.boost = i % 47 < 15;
+      inp.pitch = 0; inp.yaw = 0; inp.roll = 0; inp.handbrake = false;
+      driveBot(w.cars[1], w, K.TICK_DT, "dificil");
+      stepWorld(w, K.TICK_DT);
+      w.events.length = 0;
+    }
+    const b = w.ball.pos;
+    const c = w.cars[1].pos;
+    return `${b.x.toFixed(6)},${b.y.toFixed(6)},${b.z.toFixed(6)}|${c.x.toFixed(6)},${c.y.toFixed(6)}|${w.score.join("-")}`;
+  };
+  const a1 = play(12345);
+  const a2 = play(12345);
+  const b1 = play(999);
+  check(a1 === a2, "mesma semente = partida idêntica");
+  check(a1 !== b1, "sementes diferentes = partidas diferentes");
+}
+{
+  // o bot marca de forma consistente em várias sementes
+  let goals = 0;
+  const N = 6;
+  for (let k = 0; k < N; k++) {
+    resetBots();
+    const w = createWorld({ botCount: 1, matchTime: 999, seed: 1000 + k * 7919 });
+    for (let i = 0; i < 120 * 30; i++) {
+      const inp = w.cars[0].input;
+      inp.throttle = 0; inp.steer = 0; inp.jump = false; inp.boost = false;
+      inp.pitch = 0; inp.yaw = 0; inp.roll = 0; inp.handbrake = false;
+      driveBot(w.cars[1], w, K.TICK_DT, "dificil");
+      stepWorld(w, K.TICK_DT);
+      w.events.length = 0;
+    }
+    if (w.score[1] > 0) goals++;
+  }
+  check(goals >= N / 2, `bot difícil marca na maioria das sementes (${goals}/${N})`);
+}
+
 console.log(
   `\n\x1b[1m${pass} passaram, ${fail} falharam\x1b[0m\n`,
 );

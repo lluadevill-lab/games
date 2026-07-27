@@ -5,6 +5,7 @@
 import * as THREE from "three";
 import * as K from "../sim/constants";
 import { PADS, BIG_PAD_RADIUS, SMALL_PAD_RADIUS } from "../sim/boostPads";
+import { fieldOutline } from "../sim/arena";
 
 export interface ArenaVisuals {
   group: THREE.Group;
@@ -44,9 +45,17 @@ export function buildArena(scene: THREE.Scene): ArenaVisuals {
   const group = new THREE.Group();
 
   // ---------------------------------------------------------------- chão
-  const floorGeo = new THREE.PlaneGeometry(K.FIELD_X * 2, K.FIELD_Y * 2, 1, 1);
+  // O piso é recortado na silhueta real do campo (cantos arredondados),
+  // para não aparecer chão fora das paredes.
+  const outlineShape = new THREE.Shape();
+  {
+    const pts = fieldOutline(14);
+    outlineShape.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) outlineShape.lineTo(pts[i][0], pts[i][1]);
+    outlineShape.closePath();
+  }
   const floor = new THREE.Mesh(
-    floorGeo,
+    new THREE.ShapeGeometry(outlineShape),
     new THREE.MeshLambertMaterial({ color: COL_FLOOR }),
   );
   group.add(floor);
@@ -55,7 +64,7 @@ export function buildArena(scene: THREE.Scene): ArenaVisuals {
   for (let i = -4; i <= 4; i++) {
     if (i % 2 !== 0) continue;
     const stripe = new THREE.Mesh(
-      new THREE.PlaneGeometry(K.FIELD_X * 2, 1024),
+      new THREE.PlaneGeometry(K.FIELD_X * 2 - 1400, 1024),
       new THREE.MeshLambertMaterial({ color: COL_FLOOR_2 }),
     );
     stripe.position.set(0, i * 1024, 1);
@@ -78,21 +87,9 @@ export function buildArena(scene: THREE.Scene): ArenaVisuals {
     );
     group.add(circleLine(0, s * (K.FIELD_Y - 1152), 640, 40));
   }
-  // contorno do campo (inclui os chanfros a 45°)
-  const outline: [number, number][] = [];
-  const cx = K.FIELD_X;
-  const cy = K.FIELD_Y;
-  const cut = K.CORNER_D;
-  const corner = cut - cx; // y onde o chanfro começa
-  outline.push([cx, corner - 0]);
-  outline.push([cut - cy, cy]);
-  outline.push([-(cut - cy), cy]);
-  outline.push([-cx, corner]);
-  outline.push([-cx, -corner]);
-  outline.push([-(cut - cy), -cy]);
-  outline.push([cut - cy, -cy]);
-  outline.push([cx, -corner]);
-  outline.push([cx, corner]);
+  // Contorno do campo: vem da MESMA função que a física usa, então o que
+  // você vê é exatamente onde o carro colide (cantos arredondados incluídos).
+  const outline = fieldOutline(14);
   group.add(groundLine(outline, 0x8fa8c8, 4));
 
   // ---------------------------------------------------------------- paredes

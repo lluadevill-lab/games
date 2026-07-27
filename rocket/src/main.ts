@@ -11,10 +11,12 @@ import { createWorld, stepWorld, resetKickoff } from "./sim/world";
 import { driveBot, resetBots, type BotSkill } from "./sim/bot";
 import { predictBall } from "./sim/predict";
 import { Renderer, type Quality } from "./render/scene";
-import { Controls, DEFAULT_KEYS } from "./input/controls";
+import { Controls } from "./input/controls";
 import { buildHud, updateHud, showBanner, showToast } from "./ui/hud";
 import { buildMenu, buildPause, buildGameOver, type GameConfig } from "./ui/menu";
 import { buildTouchControls, isTouchDevice } from "./ui/touch";
+import { buildSettingsMenu } from "./ui/settingsMenu";
+import { loadSettings, saveSettings } from "./input/settings";
 import { initAudio, resumeAudio, updateEngine, sfx, setMuted, isMuted } from "./audio/sfx";
 import type { World } from "./sim/types";
 import { v3, set, qFromEuler, len } from "./core/vec";
@@ -76,8 +78,14 @@ const QUALITIES: Record<string, Quality> = {
 // inicialização do WebGL demore ou falhe.
 let quality = QUALITIES.media;
 const controls = new Controls();
+controls.settings = loadSettings();
 const hud = buildHud(app);
-const touchEl = buildTouchControls(app, controls);
+const touchUI = buildTouchControls(
+  app,
+  controls,
+  () => controls.settings,
+  () => saveSettings(controls.settings),
+);
 
 let renderer: Renderer | null = null;
 
@@ -119,14 +127,37 @@ const pause = buildPause(app, {
     menu.show();
   },
   toggleMute: () => setMuted(!isMuted()),
+  controls: () => {
+    pause.hide();
+    settings.show();
+  },
 });
 
-const menu = buildMenu(app, (cfg) => {
-  initAudio();
-  resumeAudio();
-  menu.hide();
-  startGame(cfg);
-});
+const menu = buildMenu(
+  app,
+  (cfg) => {
+    initAudio();
+    resumeAudio();
+    menu.hide();
+    startGame(cfg);
+  },
+  () => settings.show(),
+);
+
+// Tela de controles: acessível do menu e da pausa.
+const settings = buildSettingsMenu(
+  app,
+  controls,
+  touchUI,
+  () => {
+    // ao fechar, volta para onde o jogador estava
+    if (config && !running) pause.show();
+    else if (!config) menu.show();
+  },
+  () => {
+    /* mudanças aplicam na hora: o poll já lê controls.settings */
+  },
+);
 
 // Só agora o WebGL. Se falhar, o jogador vê um aviso em vez de tela preta.
 try {
@@ -157,7 +188,7 @@ function startGame(cfg: GameConfig): void {
   accumulator = 0;
   lastTime = performance.now();
   lastCountdownSecond = -1;
-  touchEl.classList.toggle("on", isTouchDevice());
+  touchUI.setVisible(isTouchDevice());
   if (cfg.mode === "training") showToast(hud, "Treino livre · R reposiciona a bola", 2600);
 }
 
@@ -225,7 +256,13 @@ function frame(now: number): void {
   fps += (1 / Math.max(rawDt, 1e-4) - fps) * 0.08;
 
   // ---- teclas de sistema (funcionam mesmo pausado)
-  if (controls.tapped(["KeyP", "Escape"]) && config) {
+  if (settings.visible()) {
+    controls.endFrame();
+    if (renderer) renderer.render(world, rawDt, 0, quality);
+    return;
+  }
+
+  if (controls.tapped("pause") && config) {
     if (pause.visible()) {
       pause.hide();
       running = true;
@@ -235,11 +272,11 @@ function frame(now: number): void {
       running = false;
     }
   }
-  if (controls.tapped(DEFAULT_KEYS.ballcam)) {
+  if (controls.tapped("ballcam")) {
     renderer.ballCam = !renderer.ballCam;
     showToast(hud, renderer.ballCam ? "Ball cam: ligada" : "Ball cam: desligada", 900);
   }
-  if (controls.tapped(DEFAULT_KEYS.reset) && running) {
+  if (controls.tapped("reset") && running) {
     if (config?.mode === "training") {
       set(world.ball.pos, 0, 0, K.BALL_RADIUS + 400);
       set(world.ball.vel, 0, 0, 0);

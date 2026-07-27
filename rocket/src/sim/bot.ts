@@ -23,6 +23,7 @@ import { clamp, sign1 } from "../core/mathx";
 import * as K from "./constants";
 import { PADS } from "./boostPads";
 import { predictBall, type PredSlice } from "./predict";
+import { simRng } from "../core/rng";
 import type { Car, CarInput, World } from "./types";
 
 export type BotSkill = "facil" | "medio" | "dificil";
@@ -359,7 +360,7 @@ export function driveBot(car: Car, world: World, dt: number, skill: BotSkill = "
         speed < desired - 150 &&
         speed < cfg.speedCap &&
         car.boost > 6 &&
-        Math.random() < cfg.boostUse &&
+        simRng.next() < cfg.boostUse &&
         distTarget > 700);
 
     // front flip para ganhar velocidade em trechos longos

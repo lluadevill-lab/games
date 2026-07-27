@@ -18,7 +18,10 @@ export const GOAL_HALF_W = 892.755;
 export const GOAL_H = 642.775;
 export const GOAL_DEPTH = 880;
 export const WALL_FILLET = 256; // arredondamento chão/parede e teto/parede
-export const CORNER_FILLET = 128; // arredondamento parede/canto diagonal
+// Raio do arredondamento dos cantos no plano XY. No jogo original os cantos
+// não são chanfros retos: são curvas amplas que permitem "correr no canto"
+// sem perder velocidade.
+export const CORNER_RADIUS = 1152;
 
 // ---------------------------------------------------------------- bola
 export const BALL_RADIUS = 91.25;

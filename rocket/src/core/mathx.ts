@@ -27,10 +27,8 @@ export function curveLookup(pts: readonly (readonly [number, number])[], x: numb
   return last[1];
 }
 
-export const rand = (min: number, max: number): number => min + Math.random() * (max - min);
-
-export const randInt = (min: number, max: number): number =>
-  Math.floor(min + Math.random() * (max - min + 1));
+// Nada de Math.random() aqui: a simulação usa o RNG semeado em core/rng.ts
+// para permanecer determinística (replays, netcode e testes reprodutíveis).
 
 /** Zona morta para eixos analógicos. */
 export function deadzone(v: number, dz = 0.15): number {

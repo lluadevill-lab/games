@@ -19,6 +19,7 @@ import {
   PAD_HEIGHT_SMALL,
 } from "./boostPads";
 import type { Car, SimEvent, World } from "./types";
+import { simRng } from "../core/rng";
 
 /** As 5 posições de kickoff do jogo (espelhadas por time). */
 export const KICKOFF_SPOTS: readonly [number, number][] = [
@@ -33,9 +34,13 @@ export interface WorldOptions {
   botCount?: number;
   matchTime?: number;
   freePlay?: boolean;
+  /** semente do RNG da simulação (determinismo total) */
+  seed?: number;
 }
 
 export function createWorld(opts: WorldOptions = {}): World {
+  // Semeia o RNG: a mesma semente sempre produz a mesma partida.
+  simRng.reseed(opts.seed ?? 0x9e3779b9);
   const botCount = opts.botCount ?? 1;
   const cars: Car[] = [makeCar(0, 0, false)];
   for (let i = 0; i < botCount; i++) cars.push(makeCar(i + 1, 1, true));
@@ -61,7 +66,7 @@ const _q = quat();
 
 /** Posiciona carros e bola para o kickoff. */
 export function resetKickoff(world: World, countdown = true): void {
-  const spotIndex = Math.floor(Math.random() * KICKOFF_SPOTS.length);
+  const spotIndex = simRng.int(KICKOFF_SPOTS.length);
   const blue = world.cars.filter((c) => c.team === 0);
   const orange = world.cars.filter((c) => c.team === 1);
 
@@ -106,7 +111,7 @@ export function resetKickoff(world: World, countdown = true): void {
 
 function respawnCar(car: Car): void {
   const mirror = car.team === 1 ? -1 : 1;
-  set(car.pos, (Math.random() * 2 - 1) * 2000, -4300 * mirror, K.REST_HEIGHT);
+  set(car.pos, simRng.range(-2000, 2000), -4300 * mirror, K.REST_HEIGHT);
   set(car.vel, 0, 0, 0);
   set(car.ang, 0, 0, 0);
   qFromEuler(car.rot, car.team === 0 ? Math.PI / 2 : -Math.PI / 2, 0, 0);
