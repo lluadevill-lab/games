@@ -1,0 +1,59 @@
+[gd_scene load_steps=3 format=3 uid="uid://rocketlite_main"]
+
+[ext_resource type="Script" path="res://scenes/main.gd" id="1_main"]
+
+[sub_resource type="Environment" id="Environment_1"]
+background_mode = 1
+background_color = Color(0.027, 0.043, 0.071, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.55, 0.7, 0.95, 1)
+ambient_light_energy = 0.55
+tonemap_mode = 2
+glow_enabled = true
+glow_intensity = 0.35
+glow_bloom = 0.15
+fog_enabled = true
+fog_light_color = Color(0.05, 0.08, 0.12, 1)
+fog_density = 0.00008
+adjustment_enabled = true
+adjustment_saturation = 1.08
+
+[node name="Main" type="Node3D"]
+script = ExtResource("1_main")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_1")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866, -0.354, 0.354, 0, 0.707, 0.707, -0.5, -0.612, 0.612, 0, 2000, 0)
+light_energy = 1.15
+light_color = Color(1, 0.97, 0.92, 1)
+shadow_enabled = true
+directional_shadow_mode = 1
+
+[node name="FillLight" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.707, 0.5, -0.5, 0, 0.707, 0.707, 0.707, -0.5, 0.5, 0, 1000, 0)
+light_energy = 0.35
+light_color = Color(0.5, 0.65, 1, 1)
+shadow_enabled = false
+
+[node name="Arena" type="Node3D" parent="."]
+
+[node name="Cars" type="Node3D" parent="."]
+
+[node name="Ball" type="Node3D" parent="."]
+
+[node name="Camera" type="Camera3D" parent="."]
+fov = 100.0
+near = 2.0
+far = 30000.0
+
+[node name="Prediction" type="MeshInstance3D" parent="."]
+
+[node name="Audio" type="Node" parent="."]
+
+[node name="UI" type="CanvasLayer" parent="."]
+layer = 10
+
+[node name="Menu" type="CanvasLayer" parent="."]
+layer = 20
