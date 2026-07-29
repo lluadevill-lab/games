@@ -2,6 +2,8 @@
 
 Coleção de jogos web em **arquivo único** (single-file HTML ~350-580 kB), offline, mobile e desktop, publicada no GitHub Pages.
 
+Também inclui o **port Godot 4** do Rocket Lite em [`godot/`](godot/) — física 1:1 a 120 Hz, pronta para export desktop/mobile/web.
+
 ## Jogar agora (sem instalar nada)
 
 **Portal oficial (hub):**
@@ -77,6 +79,21 @@ cp dist/index.html docs/corda/index.html
 
 Sistema de dificuldade por orçamento (`LevelRules` em `src/types/game.ts`): `maxHooks`, `maxLaunches`, `floorIsLethal`, `maxWallHits`, `timeLimit`, `hookRange`, `gravityScale`.
 
+## Rocket Lite — Godot 4
+
+Port completo em [`godot/`](godot/). Abra a pasta no **Godot 4.3+** e pressione F5.
+
+```bash
+# Linux (se o binário godot estiver no PATH):
+godot --path godot
+```
+
+- Física **idêntica** ao web (`sim/` é port linha a linha de `rocket/src/sim/`)
+- Menu, HUD, bot, kickoff, demolição, boost pads, ball cam, predição
+- Áudio procedural, carros low-poly com 3 silhuetas, arena SDF
+- Controles teclado + gamepad
+- Detalhes: [`godot/README.md`](godot/README.md)
+
 ## Estrutura do repo
 
 ```
@@ -87,6 +104,13 @@ Sistema de dificuldade por orçamento (`LevelRules` em `src/types/game.ts`): `ma
 │   ├── rocket/index.html # Rocket Lite single-file 578 kB
 │   ├── corda/index.html  # Corda Elástica single-file 361 kB
 │   └── corda-elastica/index.html # alias legado
+├── godot/                # Rocket Lite — Godot 4 (física 1:1)
+│   ├── project.godot
+│   ├── scenes/main.tscn  # cena principal
+│   ├── sim/              # física 120 Hz (port do TypeScript)
+│   ├── render/           # arena, carros, bola, câmera
+│   ├── input/ audio/ ui/
+│   └── README.md
 ├── rocket/               # Rocket Lite (Vite + Three)
 │   ├── src/sim/          # física a 120Hz
 │   ├── src/core/         # vec math, rng
