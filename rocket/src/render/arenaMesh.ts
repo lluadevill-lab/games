@@ -97,8 +97,32 @@ export function buildArena(scene: THREE.Scene): ArenaVisuals {
     color: COL_WALL,
     side: THREE.DoubleSide,
     transparent: true,
-    opacity: 0.92,
+    opacity: 0.98,
+    depthWrite: true,
   });
+  // Topo/teto: um plano simples fechando em CEILING_Z. Antigamente o teto
+  // era invisível e a câmera enxergava o nada quando o carro subia muito.
+  const ceiling = new THREE.Mesh(
+    new THREE.PlaneGeometry(K.FIELD_X * 2 + 3000, K.FIELD_Y * 2 + 3000),
+    new THREE.MeshLambertMaterial({ color: 0x161d28, side: THREE.DoubleSide }),
+  );
+  ceiling.position.set(0, 0, K.CEILING_Z);
+  ceiling.rotation.x = Math.PI / 2;
+  group.add(ceiling);
+  // Um frame sutil no teto pra dar referência de profundidade.
+  group.add(
+    groundLine(
+      [
+        [-K.FIELD_X, -K.FIELD_Y],
+        [K.FIELD_X, -K.FIELD_Y],
+        [K.FIELD_X, K.FIELD_Y],
+        [-K.FIELD_X, K.FIELD_Y],
+        [-K.FIELD_X, -K.FIELD_Y],
+      ],
+      0x3a4a63,
+      K.CEILING_Z - 2,
+    ),
+  );
 
   const addWall = (
     ax: number,
