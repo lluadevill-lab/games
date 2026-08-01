@@ -36,6 +36,8 @@ export class Renderer {
   // estado da câmera (suavizado)
   private camPos = new THREE.Vector3(0, -3000, 800);
   private camLook = new THREE.Vector3();
+  private camVel = new THREE.Vector3();
+  private camFov = 110;
   ballCam = true;
 
   constructor(canvas: HTMLCanvasElement, quality: Quality) {
@@ -47,8 +49,11 @@ export class Renderer {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, quality.pixelRatio));
     this.renderer.setClearColor(0x070b12, 1);
 
-    this.scene.fog = new THREE.Fog(0x070b12, 6000, 16000);
-    this.camera = new THREE.PerspectiveCamera(100, 1, 20, 30000);
+    this.scene.fog = new THREE.Fog(0x070b12, 6500, 19000);
+    // FOV 110° = padrão do Rocket League. near baixo evita que o carro
+    // desapareça perto da câmera em aéreos/front-flips; far longe evita
+    // clipping do teto.
+    this.camera = new THREE.PerspectiveCamera(110, 1, 5, 32000);
     this.camera.up.set(0, 0, 1);
 
     this.buildLights();
@@ -293,8 +298,8 @@ export class Renderer {
     if (!car) return;
     const ball = world.ball;
 
-    // Ball cam: a câmera fica atrás do carro no eixo carro→bola.
-    // Cam padrão: atrás do nariz do carro.
+    // Direção horizontal da câmera. Na ballcam é o vetor carro→bola; no
+    // carro cam é a projeção do nariz no plano XY.
     let dirX: number, dirY: number;
     if (this.ballCam) {
       dirX = ball.pos.x - car.pos.x;
@@ -304,7 +309,6 @@ export class Renderer {
       dirY /= l;
     } else {
       const q = car.rot;
-      // eixo X local rotacionado, componente horizontal
       const fx = 1 - 2 * (q.y * q.y + q.z * q.z);
       const fy = 2 * (q.x * q.y + q.z * q.w);
       const l = Math.hypot(fx, fy) || 1;
@@ -312,27 +316,103 @@ export class Renderer {
       dirY = fy / l;
     }
 
+    // Parâmetros estilo Rocket League (dist 270, height 110, angle -3°,
+    // stiffness 0.5, swivel speed ~5). Em aéreo afastamos e subimos um
+    // pouco para que a bola NUNCA saia do quadro.
+    const inAir = !car.onGround;
+    const ballZ = ball.pos.z;
+    const carZ = car.pos.z;
+    const dist2D = Math.hypot(ball.pos.x - car.pos.x, ball.pos.y - car.pos.y);
+    const ballHeightAngle = Math.atan2(ballZ - carZ, dist2D);
+
     const speed = Math.hypot(car.vel.x, car.vel.y, car.vel.z);
-    const dist = 270 * 1.35 + speed * 0.08;
-    const height = 110 * 1.6 + Math.max(0, car.pos.z) * 0.55;
+    const speedFactor = Math.min(speed / 2300, 1);
 
-    const tx = car.pos.x - dirX * dist;
-    const ty = car.pos.y - dirY * dist;
-    const tz = car.pos.z + height;
+    const BASE_DIST = 400;
+    const BASE_HEIGHT = 280;
+    const ANGLE_DEG = -4;
+    const angleRad = (-ANGLE_DEG * Math.PI) / 180;
 
-    const k = 6.5;
-    this.camPos.x = damp(this.camPos.x, tx, k, dt);
-    this.camPos.y = damp(this.camPos.y, ty, k, dt);
-    this.camPos.z = damp(this.camPos.z, Math.max(tz, 60), k * 1.3, dt);
+    // Correções dinâmicas:
+    //  - subida: quando a bola está MUITO ALTA (ângulo > 20°), a câmera
+    //    sobe e recua junto;
+    //  - parede/defesa: perto da parede do próprio gol, recua mais para
+    //    mostrar o carro e a baliza;
+    //  - aéreo: zoom out suave (fov sobe) para não cortar o teto.
+    const highBoost = Math.max(0, ballHeightAngle - 0.32) * 1.6;
+    // sinal do gol do jogador focado (time 0 = azul em -Y, time 1 = laranja em +Y)
+    const ownGoalSign = focusCarId === 0 ? -1 : 1;
+    const nearOwnWall =
+      car.pos.y * ownGoalSign < -(K.FIELD_Y - 1100) ? 1 : 0;
+    const nearAnyWall =
+      Math.min(K.FIELD_X - Math.abs(car.pos.x), K.FIELD_Y - Math.abs(car.pos.y)) < 900
+        ? 1
+        : 0;
 
-    // olha para a bola em ball cam, senão à frente do carro
-    const lx = this.ballCam ? ball.pos.x : car.pos.x + dirX * 900;
-    const ly = this.ballCam ? ball.pos.y : car.pos.y + dirY * 900;
-    const lz = this.ballCam ? ball.pos.z + 60 : car.pos.z + 120;
-    this.camLook.x = damp(this.camLook.x, lx, k * 1.4, dt);
-    this.camLook.y = damp(this.camLook.y, ly, k * 1.4, dt);
-    this.camLook.z = damp(this.camLook.z, lz, k * 1.4, dt);
+    const dist =
+      BASE_DIST +
+      speedFactor * 220 +
+      highBoost * 520 +
+      nearOwnWall * 520 +
+      (inAir ? 180 : 0);
+    const height =
+      BASE_HEIGHT +
+      speedFactor * 90 +
+      highBoost * 650 +
+      Math.max(0, carZ) * 0.55 +
+      nearOwnWall * 260;
+    // inclinação para trás em aéreo/alto para ver a bola mais acima
+    const pitchBack = angleRad - highBoost * 0.55 - nearOwnWall * 0.08;
 
+    const tx = car.pos.x - dirX * Math.cos(pitchBack) * dist;
+    const ty = car.pos.y - dirY * Math.cos(pitchBack) * dist;
+    const tz = Math.max(80, car.pos.z + Math.sin(pitchBack) * dist + height);
+
+    // Suavização: câmera mais ágil que antes mas sem trepidação.
+    // Quando está na parede/aéreo a câmera é mais macia para não doer a vista.
+    const stiff = 10 - nearAnyWall * 2 - (inAir ? 1.5 : 0);
+    const k = Math.max(3.5, stiff);
+    const smoothDamp = (a: number, b: number, kk: number): number => damp(a, b, kk, dt);
+    this.camPos.x = smoothDamp(this.camPos.x, tx, k);
+    this.camPos.y = smoothDamp(this.camPos.y, ty, k);
+    this.camPos.z = smoothDamp(this.camPos.z, tz, k * 0.9);
+
+    // Ponto de foco: interpola entre "à frente do carro" e "bola" baseado
+    // em quão desalinhados eles estão. Isso é o que impede a bola de
+    // escapar pelo topo da tela quando está alta ou perto da parede.
+    let lx: number, ly: number, lz: number;
+    if (this.ballCam) {
+      // olha num ponto ENTRE o nariz do carro e a bola, ponderado pela
+      // distância/altura: a bola entra com mais peso quando está longe
+      // ou alta, senão a câmera olha "muito no pé" do carro.
+      const aheadX = car.pos.x + dirX * 700;
+      const aheadY = car.pos.y + dirY * 700;
+      const aheadZ = car.pos.z + 120;
+      const ballW = Math.min(
+        0.85,
+        0.35 + dist2D / 3500 * 0.35 + Math.max(0, ballHeightAngle) * 0.8,
+      );
+      const carW = 1 - ballW;
+      lx = aheadX * carW + ball.pos.x * ballW;
+      ly = aheadY * carW + ball.pos.y * ballW;
+      lz = aheadZ * carW + (ball.pos.z + 80) * ballW;
+    } else {
+      lx = car.pos.x + dirX * 900;
+      ly = car.pos.y + dirY * 900;
+      lz = car.pos.z + 120;
+    }
+    this.camLook.x = smoothDamp(this.camLook.x, lx, k * 1.4);
+    this.camLook.y = smoothDamp(this.camLook.y, ly, k * 1.4);
+    this.camLook.z = smoothDamp(this.camLook.z, lz, k * 1.2);
+
+    // FOV dinâmico: em aéreo ou a bola muito alta, abre um pouco para
+    // enquadrar melhor; em velocidade máxima um leve boost de sensação.
+    const targetFov = 110 + (inAir ? 6 : 0) + highBoost * 10 + speedFactor * 3;
+    this.camFov = smoothDamp(this.camFov, targetFov, 5);
+    this.camera.fov = this.camFov;
+    this.camera.updateProjectionMatrix();
+
+    // Shake.
     let sx = 0,
       sy = 0,
       sz = 0;
@@ -347,7 +427,7 @@ export class Renderer {
 
     this.camera.position.set(this.camPos.x + sx, this.camPos.y + sy, this.camPos.z + sz);
     this.camera.lookAt(this.camLook);
-    // a câmera do RL nunca rola: up sempre no eixo Z do mundo
+    // a câmera do RL nunca rola: up sempre no eixo Z do mundo.
     this.camera.up.set(0, 0, 1);
   }
 

@@ -537,20 +537,28 @@ section("Predição da bola");
 section("Bot");
 {
   resetBots();
-  const w = createWorld({ botCount: 1, matchTime: 60, seed: 4242 });
-  const steps = Math.round(30 / K.TICK_DT);
-  let botMoved = 0;
+  const w = createWorld({ botCount: 1, matchTime: 90, seed: 4242 });
+  // Pula a contagem do kickoff para medir o movimento em jogo corrido.
+  w.phase = "play";
+  w.phaseTimer = 0;
+  const SECONDS = 30;
+  const steps = Math.round(SECONDS / K.TICK_DT);
+  let botTraveled = 0;
   let ballTouched = false;
-  const start = { ...w.cars[1].pos };
+  let lastPos = { x: w.cars[1].pos.x, y: w.cars[1].pos.y };
   for (let i = 0; i < steps; i++) {
     idle(w.cars[0].input);
     driveBot(w.cars[1], w, K.TICK_DT, "dificil");
     stepWorld(w, K.TICK_DT);
+    botTraveled += Math.hypot(
+      w.cars[1].pos.x - lastPos.x,
+      w.cars[1].pos.y - lastPos.y,
+    );
+    lastPos = { x: w.cars[1].pos.x, y: w.cars[1].pos.y };
     for (const ev of w.events) if (ev.type === "ballHit" && ev.carId === 1) ballTouched = true;
     w.events.length = 0;
   }
-  botMoved = Math.hypot(w.cars[1].pos.x - start.x, w.cars[1].pos.y - start.y);
-  check(botMoved > 500, "bot se movimenta", `${botMoved.toFixed(0)} uu`);
+  check(botTraveled > 3000, "bot se movimenta", `${Math.round(botTraveled)} uu percorridos em ${SECONDS}s`);
   check(ballTouched, "bot alcança e toca a bola em 30 s");
   check(w.score[1] >= 1, "bot difícil faz gol sozinho em 30 s", `placar ${w.score[0]}×${w.score[1]}`);
   const inArena = w.cars.every(
@@ -671,13 +679,16 @@ section("Determinismo");
   check(a1 !== b1, "sementes diferentes = partidas diferentes");
 }
 {
-  // o bot marca de forma consistente em várias sementes
+  // o bot marca de forma consistente em várias sementes (45 s por seed)
   let goals = 0;
   const N = 6;
+  const SECS = 45;
   for (let k = 0; k < N; k++) {
     resetBots();
     const w = createWorld({ botCount: 1, matchTime: 999, seed: 1000 + k * 7919 });
-    for (let i = 0; i < 120 * 30; i++) {
+    w.phase = "play";
+    w.phaseTimer = 0;
+    for (let i = 0; i < 120 * SECS; i++) {
       const inp = w.cars[0].input;
       inp.throttle = 0; inp.steer = 0; inp.jump = false; inp.boost = false;
       inp.pitch = 0; inp.yaw = 0; inp.roll = 0; inp.handbrake = false;
@@ -687,7 +698,7 @@ section("Determinismo");
     }
     if (w.score[1] > 0) goals++;
   }
-  check(goals >= N / 2, `bot difícil marca na maioria das sementes (${goals}/${N})`);
+  check(goals >= N / 2, `bot difícil marca na maioria das sementes em ${SECS}s (${goals}/${N})`);
 }
 
 console.log(
